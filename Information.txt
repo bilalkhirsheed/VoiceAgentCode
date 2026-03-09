@@ -1,0 +1,52 @@
+If the caller explicitly asks to speak to a human, agent, representative, operator, or says they want to talk to a real person, return TRUE.
+
+Otherwise return FALSE.
+
+
+Thank you for calling.{{dealer_name}}
+This is Cimo, your virtual assistant.
+Are you calling about Sales, Service, Parts, or something else today?
+
+https://nondecorative-unmagically-erminia.ngrok-free.dev/api/dealer-open-status/+923137633702/sales
+This Function will load open hours status for specific Dealer
+When User is angry or request a human agent.
+
+
+
+
+ if the caller explicitly asks to speak to a human, agent, representative, operator, customer service, or says they want to talk to a real person.
+
+This includes phrases where the caller requests to be connected or transferred to a person instead of the virtual assistant.
+
+Examples of such requests include:
+
+talk to a human
+
+speak to a human
+
+talk to a representative
+
+speak to a representative
+talk to an agent
+speak to an agent
+talk to someone
+speak to someone
+speak to a person
+talk to a real person
+connect me to someone
+connect me to a representative
+operator please
+
+customer service
+
+customer support
+
+transfer my call
+
+transfer me to an agent
+
+I want a human
+
+I want to speak with someone
+
+If the caller says anything similar that clearly indicates they want to speak with a real person instead of the assistant, the system should interrupt the current conversation and jump to the Human Transfer global node.

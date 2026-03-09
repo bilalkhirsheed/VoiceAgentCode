@@ -1,0 +1,31 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn.lock
+package-lock.json
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+
+# Logs
+logs/
+*.log
+*.tmp
+
+# Env / secrets
+.env
+.env.*
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
