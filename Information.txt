@@ -2,6 +2,14 @@ If the caller explicitly asks to speak to a human, agent, representative, operat
 
 Otherwise return FALSE.
 
+Ngrok Server:
+ngrok http --domain=nondecorative-unmagically-erminia.ngrok-free.dev 5000 This is command use to restart it
+
+
+Retell Webhook
+https://nondecorative-unmagically-erminia.ngrok-free.dev/api/retell-events
+
+
 
 Thank you for calling.{{dealer_name}}
 This is Cimo, your virtual assistant.
@@ -49,4 +57,8 @@ I want a human
 
 I want to speak with someone
 
-If the caller says anything similar that clearly indicates they want to speak with a real person instead of the assistant, the system should interrupt the current conversation and jump to the Human Transfer global node.
+If the caller says anything similar that clearly indicates they want to speak with a real person instead of the assistant, the system should interrupt the current conversation and jump to the Human Transfer global node.]
+
+Credetianl List:
+retelluser1
+StrongPassword123

@@ -1,42 +1,82 @@
-import React, { useState } from 'react';
-import { DealerPanel } from './components/DealerPanel.jsx';
-import { CallsPanel } from './components/CallsPanel.jsx';
-
-const TABS = [
-  { id: 'dealers', label: 'Dealers & Config' },
-  { id: 'calls', label: 'Call Logs' }
-];
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { CrmLayout } from './components/crm/CrmLayout';
+import { HomePage } from './pages/HomePage';
+import { CallsPage } from './pages/CallsPage';
+import { CallDetailPage } from './pages/CallDetailPage';
+import { PlaceholderPage } from './pages/PlaceholderPage';
+import { CalendarPage } from './pages/CalendarPage';
+import { DealerEntryPage } from './pages/DealerEntryPage';
+import { HangupsPage } from './pages/HangupsPage';
+import { CallbackRequestsPage } from './pages/CallbackRequestsPage';
+import { SalesLeadsPage } from './pages/SalesLeadsPage';
+import { ServiceAppointmentsPage } from './pages/ServiceAppointmentsPage';
+import { PartsRequestsPage } from './pages/PartsRequestsPage';
+import { DealershipInfoPage } from './pages/DealershipInfoPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminLoginPage } from './pages/admin/AdminLoginPage';
+import { AdminDashboardHome } from './pages/admin/AdminDashboardHome';
+import { AdminDealersListPage } from './pages/admin/AdminDealersListPage';
+import { AdminAddDealerPage } from './pages/admin/AdminAddDealerPage';
+import { AdminDealerDetailPage } from './pages/admin/AdminDealerDetailPage';
+import { AdminAddDepartmentPage } from './pages/admin/AdminAddDepartmentPage';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dealers');
-
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-title">
-          <h1>AI Call Platform · Admin</h1>
-          <span>Onboard dealers, tune routing, and inspect AI call performance.</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div className="pill">Staging / Localhost</div>
-          <nav className="tabs">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={'tab' + (activeTab === tab.id ? ' active' : '')}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
-
-      {activeTab === 'dealers' && <DealerPanel />}
-      {activeTab === 'calls' && <CallsPanel />}
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<DealerEntryPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route
+          path="/admin"
+          element={
+            window.localStorage.getItem('admin_authenticated') === 'true' ? (
+              <AdminLayout />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        >
+          <Route index element={<AdminDashboardHome />} />
+          <Route path="dealers" element={<AdminDealersListPage />} />
+          <Route path="dealers/new" element={<AdminAddDealerPage />} />
+          <Route path="dealers/:dealerId" element={<AdminDealerDetailPage />} />
+          <Route path="dealers/:dealerId/departments/new" element={<AdminAddDepartmentPage />} />
+        </Route>
+        <Route path="/crm" element={<CrmLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="calls" element={<CallsPage />} />
+          <Route path="calls/:callId" element={<CallDetailPage />} />
+          <Route path="callback-requests" element={<CallbackRequestsPage />} />
+          <Route path="service-appointments" element={<ServiceAppointmentsPage />} />
+          <Route path="sales-leads" element={<SalesLeadsPage />} />
+          <Route path="parts-requests" element={<PartsRequestsPage />} />
+          <Route
+            path="transfers"
+            element={
+              <PlaceholderPage
+                title="Transfers"
+                description="Calls transferred to staff (Success / Failed / No Answer / Busy)."
+                note="Built from call_transfers; group by call_id and show result."
+              />
+            }
+          />
+          <Route path="dealership" element={<DealershipInfoPage />} />
+          <Route path="calendar" element={<CalendarPage />} />
+          <Route path="hangups" element={<HangupsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route
+            path="settings"
+            element={
+              <PlaceholderPage
+                title="Settings"
+                description="Roles (Admin / Manager / Viewer) and privacy controls."
+                note="When auth/RBAC is added, enforce field-level hiding here."
+              />
+            }
+          />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
-

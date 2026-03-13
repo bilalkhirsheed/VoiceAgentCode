@@ -1,7 +1,7 @@
 const supabase = require('../config/supabaseClient');
 const { dealer, department, departmentHours, holiday } = require('../models');
 
-// Helper: build dealer config response for Retell
+// Helper: build dealer config response for Retell and admin tools
 async function buildDealerConfig(dealerId) {
   const dealerTable = dealer.tableName;
   const dealerCols = dealer.columns;
@@ -444,6 +444,7 @@ module.exports = {
   deleteDealer,
   getDealerConfig,
   getDealerConfigByDid,
-  getDealerOpenStatusByDid
+  getDealerOpenStatusByDid,
+  buildDealerConfig
 };
 

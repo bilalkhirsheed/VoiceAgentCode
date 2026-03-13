@@ -19,6 +19,11 @@ logs/
 .env
 .env.*
 
+# Google Calendar credentials (never commit)
+backend/config/google-calendar-credentials.json
+**/google-calendar-credentials.json
+**/vehicleservicebooking*.json
+
 # IDE / editor
 .vscode/
 .idea/

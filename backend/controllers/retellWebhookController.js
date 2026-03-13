@@ -5,7 +5,8 @@ const {
   callEvent,
   callTranscript,
   callTransfer,
-  callbackLog
+  callbackLog,
+  callAnalysis
 } = require('../models');
 
 // Utility: find dealer_id from DID (primary_phone)
@@ -280,6 +281,95 @@ async function handleCallSummary(payload) {
   if (error) throw error;
 }
 
+function categorizeCallFromAnalysis(custom) {
+  const sr = (custom.service_request || '').toLowerCase();
+  const reason = (custom.Reason_for_call || '').toLowerCase();
+
+  if (/service|maintenance|oil|repair|booking/.test(sr) || /service/.test(reason)) {
+    return 'service';
+  }
+  if (/sale|buy|purchase|finance|test drive|test-drive/.test(sr) || /sale|buy|purchase/.test(reason)) {
+    return 'sales';
+  }
+  if (/part|spare|accessor/.test(sr) || /part|spare|accessor/.test(reason)) {
+    return 'parts';
+  }
+  if (custom.Call_Back_Capture || /callback/.test(reason)) {
+    return 'callback';
+  }
+  return 'other';
+}
+
+async function handleCallAnalyzed(payload) {
+  const caTable = callAnalysis.tableName;
+  const caCols = callAnalysis.columns;
+
+  const analysis = payload.call_analysis || {};
+  const custom = analysis.custom_analysis_data || {};
+  const collected = payload.collected_dynamic_variables || {};
+
+  const callId = payload.call_id;
+  const dealerName = custom.Dealer_name || collected.dealer_name || null;
+
+  // user hangup detection
+  const disconnectionReason = payload.disconnection_reason || null;
+  const isUserHangup = disconnectionReason && /user/i.test(disconnectionReason);
+
+  const category = categorizeCallFromAnalysis({
+    ...custom,
+    Reason_for_call: collected.Reason_for_call
+  });
+
+  const upsertPayload = {
+    [caCols.call_id]: callId,
+    [caCols.dealer_name]: dealerName,
+    [caCols.dealer_phone]: collected.sales_transfer_phone || collected.service_transfer_phone || collected.parts_transfer_phone || null,
+    [caCols.call_summary]: analysis.call_summary || null,
+    [caCols.call_successful]: analysis.call_successful ?? null,
+    [caCols.user_sentiment]: analysis.user_sentiment || null,
+    [caCols.customer_name]: custom.customer_name || collected.customer_name || null,
+    [caCols.customer_phone]: custom.customer_phone || collected.customer_phone || null,
+    [caCols.customer_email]: custom.customer_Email || custom.customer_email || null,
+    [caCols.vehicle_type]: custom.vehicle_type || null,
+    [caCols.test_drive]: custom.test_drive || null,
+    [caCols.trade_in]: custom.trade_in || null,
+    [caCols.vehicle_make]: custom.vehicle_make || null,
+    [caCols.vehicle_model]: custom.vehicle_model || null,
+    [caCols.vehicle_year]: custom.vehicle_year || null,
+    [caCols.service_request]: custom.service_request || collected.Reason_for_call || null,
+    [caCols.preferred_date]: custom.preferred_date || null,
+    [caCols.preferred_time]: custom.preferred_time || null,
+    [caCols.call_back_capture]: custom.Call_Back_Capture || collected.Call_Back_Capture || null,
+    [caCols.category]: category,
+    [caCols.disconnection_reason]: disconnectionReason,
+    [caCols.is_user_hangup]: isUserHangup,
+    [caCols.recording_url]: payload.recording_url || null,
+    [caCols.public_log_url]: payload.public_log_url || null,
+    [caCols.start_timestamp]: payload.start_timestamp || null,
+    [caCols.end_timestamp]: payload.end_timestamp || null,
+    [caCols.duration_ms]: payload.duration_ms || null
+  };
+
+  // upsert by call_id
+  const { data: existing, error: selError } = await supabase
+    .from(caTable)
+    .select('*')
+    .eq(caCols.call_id, callId)
+    .maybeSingle();
+  if (selError) throw selError;
+
+  if (existing) {
+    const { error } = await supabase
+      .from(caTable)
+      .update(upsertPayload)
+      .eq(caCols.call_id, callId);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from(caTable).insert([upsertPayload]);
+    if (error) throw error;
+  }
+}
+
 async function handleCallbackCapturedFromFunction(payload) {
   // Example for custom function events from Retell:
   // { event: 'function_call', call_id, function_name, arguments: { customer_name, phone_number, preferred_time } }
@@ -401,6 +491,9 @@ async function handleRetellWebhook(req, res) {
         break;
       case 'call_summary':
         await handleCallSummary(payload);
+        break;
+      case 'call_analyzed':
+        await handleCallAnalyzed(payload);
         break;
       case 'function_call':
         await handleCallbackCapturedFromFunction(payload);

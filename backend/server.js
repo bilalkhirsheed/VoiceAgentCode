@@ -20,6 +20,9 @@ const leadRoutes = require('./routes/leadRoutes');
 const callbackRoutes = require('./routes/callbackRoutes');
 const callRoutes = require('./routes/callRoutes');
 const retellRoutes = require('./routes/retellRoutes');
+const serviceBookingRoutes = require('./routes/serviceBookingRoutes');
+const calendarRoutes = require('./routes/calendarRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 app.use('/api', dealerRoutes);
 app.use('/api', departmentRoutes);
@@ -27,6 +30,9 @@ app.use('/api', leadRoutes);
 app.use('/api', callbackRoutes);
 app.use('/api', callRoutes);
 app.use('/api', retellRoutes);
+app.use('/api', serviceBookingRoutes);
+app.use('/api', calendarRoutes);
+app.use('/api', adminRoutes);
 
 // Global error handler fallback (for uncaught errors in async handlers)
 // eslint-disable-next-line no-unused-vars

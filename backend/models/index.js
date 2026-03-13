@@ -11,6 +11,8 @@ const callTranscript = require('./callTranscript');
 const callTag = require('./callTag');
 const callTransfer = require('./callTransfer');
 const callbackLog = require('./callbackLog');
+const serviceAppointment = require('./serviceAppointment');
+const callAnalysis = require('./callAnalysis');
 
 module.exports = {
   dealer,
@@ -24,5 +26,7 @@ module.exports = {
   callTranscript,
   callTag,
   callTransfer,
-  callbackLog
+  callbackLog,
+  serviceAppointment,
+  callAnalysis
 };
