@@ -1,5 +1,5 @@
 const supabase = require('../config/supabaseClient');
-const { dealer, callAnalysis, serviceAppointment } = require('../models');
+const { dealer, call, callAnalysis, serviceAppointment } = require('../models');
 
 async function findDealerByPrimaryPhone(primaryPhone) {
   const dealerTable = dealer.tableName;
@@ -45,7 +45,10 @@ async function getDealerSummaryReport(req, res) {
     const dealerCols = dealer.columns;
     const dealerName = dealerRow[dealerCols.dealer_name];
     const normalizedDealerPhone = dealerRow[dealerCols.primary_phone];
+    const dealerId = dealerRow[dealerCols.id];
 
+    const callTable = call.tableName;
+    const callCols = call.columns;
     const caTable = callAnalysis.tableName;
     const caCols = callAnalysis.columns;
     const saTable = serviceAppointment.tableName;
@@ -56,12 +59,47 @@ async function getDealerSummaryReport(req, res) {
     sinceDate.setDate(sinceDate.getDate() - daysInt);
     const sinceIso = sinceDate.toISOString();
 
-    const [analysisRes, apptRes] = await Promise.all([
+    const didVariants = [...new Set([
+      normalizedDealerPhone,
+      normalizedDealerPhone.startsWith('+') ? normalizedDealerPhone : `+${normalizedDealerPhone}`,
+      normalizedDealerPhone.replace(/^\+/, '')
+    ])].filter(Boolean);
+
+    // Use the call IDs linked to this dealer, not `call_analysis.dealer_name`.
+    // `call_analysis.dealer_name` is a snapshot and becomes stale after dealer renames.
+    const [callsByDealerIdRes, callsByDidRes] = await Promise.all([
       supabase
-        .from(caTable)
-        .select('*')
-        .eq(caCols.dealer_name, dealerName)
-        .gte(caCols.created_at, sinceIso),
+        .from(callTable)
+        .select(callCols.id)
+        .eq(callCols.dealer_id, String(dealerId))
+        .gte(callCols.start_time, sinceIso)
+        .order(callCols.start_time, { ascending: false })
+        .limit(5000),
+      supabase
+        .from(callTable)
+        .select(callCols.id)
+        .in(callCols.did, didVariants)
+        .gte(callCols.start_time, sinceIso)
+        .order(callCols.start_time, { ascending: false })
+        .limit(5000)
+    ]);
+
+    if (callsByDealerIdRes.error) throw new Error(callsByDealerIdRes.error.message);
+    if (callsByDidRes.error) throw new Error(callsByDidRes.error.message);
+
+    const callIds = [...new Set([
+      ...(callsByDealerIdRes.data || []).map((r) => r[callCols.id]).filter(Boolean),
+      ...(callsByDidRes.data || []).map((r) => r[callCols.id]).filter(Boolean)
+    ])];
+
+    const [analysisRes, apptRes] = await Promise.all([
+      callIds.length > 0
+        ? supabase
+            .from(caTable)
+            .select('*')
+            .in(caCols.call_id, callIds)
+            .gte(caCols.created_at, sinceIso)
+        : { data: [] },
       supabase
         .from(saTable)
         .select('*')

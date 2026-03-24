@@ -44,88 +44,95 @@ export function CalendarPage() {
   }, [location.search]);
 
   return (
-    <div className="p-6 flex flex-col h-full space-y-4">
-      <div>
-        <h1 className="text-[20px] font-semibold text-crm-text">Service Calendar</h1>
-        <p className="text-[13px] text-crm-text2">
-          View `service_request` bookings pulled from Google Calendar for this dealer.
+    <div className="crm-page flex flex-col h-full space-y-6">
+      <div className="crm-page-header">
+        <h1 className="crm-page-title">Service Calendar</h1>
+        <p className="crm-page-subtitle">
+          View service_request bookings pulled from Google Calendar for this dealer.
         </p>
       </div>
 
       {error && (
-        <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+        <div className="rounded-[10px] border border-red-900/70 bg-red-950/40 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       )}
 
       {loading && !events.length && !error && (
-        <div className="text-sm text-crm-text2">Loading events…</div>
+        <div className="text-sm text-slate-400">Loading events…</div>
       )}
 
-      <div className="flex-1 overflow-auto border border-gray-200 rounded-md bg-white">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Date</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Time</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Title</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Details</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Calendar Link</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {events.length === 0 && !loading && !error && (
+      <div className="crm-section-card flex-1 overflow-hidden p-0">
+        <div className="flex-1 overflow-auto">
+          <table className="crm-table min-w-full text-sm">
+            <thead>
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">
-                  No events in the next 7 days.
-                </td>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Title</th>
+                <th>Details</th>
+                <th>Calendar Link</th>
               </tr>
-            )}
-            {events.map((ev) => {
-              const start = ev.start?.dateTime || ev.start?.date;
-              const end = ev.end?.dateTime || ev.end?.date;
-              const startDate = start ? new Date(start) : null;
-              const endDate = end ? new Date(end) : null;
-              const dateLabel = startDate
-                ? startDate.toLocaleDateString(undefined, {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric'
-                  })
-                : '-';
-              const timeLabel =
-                startDate && endDate
-                  ? `${startDate.toLocaleTimeString(undefined, {
-                      hour: 'numeric',
-                      minute: '2-digit'
-                    })} – ${endDate.toLocaleTimeString(undefined, {
-                      hour: 'numeric',
-                      minute: '2-digit'
-                    })}`
-                  : '-';
-
-              return (
-                <tr key={ev.id}>
-                  <td className="px-4 py-2 whitespace-nowrap text-gray-900">{dateLabel}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-gray-700">{timeLabel}</td>
-                  <td className="px-4 py-2 text-gray-900">{ev.summary || 'service_request'}</td>
-                  <td className="px-4 py-2 text-gray-600 whitespace-pre-line text-xs max-w-xs">
-                    {ev.description || '-'}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-blue-600 text-xs">
-                    {ev.htmlLink ? (
-                      <a href={ev.htmlLink} target="_blank" rel="noreferrer" className="hover:underline">
-                        Open in Google Calendar
-                      </a>
-                    ) : (
-                      '-'
-                    )}
+            </thead>
+            <tbody>
+              {events.length === 0 && !loading && !error && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500 text-sm border-r-0">
+                    No events in the next 7 days.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+              {events.map((ev) => {
+                const start = ev.start?.dateTime || ev.start?.date;
+                const end = ev.end?.dateTime || ev.end?.date;
+                const startDate = start ? new Date(start) : null;
+                const endDate = end ? new Date(end) : null;
+                const dateLabel = startDate
+                  ? startDate.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric'
+                    })
+                  : '-';
+                const timeLabel =
+                  startDate && endDate
+                    ? `${startDate.toLocaleTimeString(undefined, {
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })} – ${endDate.toLocaleTimeString(undefined, {
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}`
+                    : '-';
+
+                return (
+                  <tr key={ev.id}>
+                    <td className="whitespace-nowrap text-slate-100">{dateLabel}</td>
+                    <td className="whitespace-nowrap text-slate-300">{timeLabel}</td>
+                    <td className="text-slate-100">{ev.summary || 'service_request'}</td>
+                    <td className="text-slate-400 whitespace-pre-line text-xs max-w-xs">
+                      {ev.description || '-'}
+                    </td>
+                    <td className="whitespace-nowrap text-xs">
+                      {ev.htmlLink ? (
+                        <a
+                          href={ev.htmlLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 font-medium text-sky-400 hover:text-sky-300 hover:underline"
+                        >
+                          Open in Google Calendar
+                        </a>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

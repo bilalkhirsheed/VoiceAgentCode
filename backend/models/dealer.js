@@ -14,6 +14,9 @@ const dealerSchema = {
     website_url: 'website_url',
     default_voice: 'default_voice', // male / female
     primary_phone: 'primary_phone',
+    inbound_did: 'inbound_did',
+    contact_email: 'contact_email',
+    password_hash: 'password_hash',
     created_at: 'created_at',
     updated_at: 'updated_at'
   }

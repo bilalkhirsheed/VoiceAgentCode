@@ -1,7 +1,8 @@
 -- service_appointments: stores detailed booking info alongside Google Calendar
 create table if not exists public.service_appointments (
   id uuid primary key default gen_random_uuid(),
-  dealer_id uuid,
+  dealer_id text,
+  -- dealer_id stores dealers.id (e.g. "1") so it matches calls.dealer_id and dealers.id (bigint)
   dealer_phone text,
   dealer_name text,
   customer_name text,

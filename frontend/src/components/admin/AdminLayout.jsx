@@ -5,73 +5,82 @@ export function AdminLayout() {
   const navigate = useNavigate();
 
   function handleLogout() {
-    window.localStorage.removeItem('admin_authenticated');
+    window.sessionStorage.removeItem('admin_authenticated');
     navigate('/admin/login');
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] text-crm-text flex">
-      <aside className="w-[220px] border-r border-crm-border bg-white flex flex-col">
-        <div className="px-4 py-4 border-b border-crm-border">
-          <Link to="/admin" className="flex items-center gap-2 text-[13px] font-semibold">
-            <Database size={18} />
+    <div className="min-h-screen bg-slate-950 text-slate-100 crm-shell">
+      <aside className="fixed inset-y-0 left-0 z-30 flex w-[248px] flex-col border-r border-slate-800 bg-slate-900 shadow-crm-sm">
+        <div className="px-4 py-5 border-b border-slate-800">
+          <Link
+            to="/admin"
+            className="flex items-center gap-2 text-[14px] font-semibold tracking-tight text-slate-50"
+          >
+            <Database size={18} className="text-sky-400" />
             <span>Admin Dashboard</span>
           </Link>
-          <div className="mt-1 text-[12px] text-crm-text2">Manage dealers, departments & hours</div>
+          <div className="mt-1 text-[12px] text-slate-400">Manage dealers, departments & hours</div>
         </div>
-        <nav className="flex-1 px-2 py-3">
+        <nav className="flex-1 overflow-auto px-2 py-3">
           <NavLink
             to="/admin"
             end
             className={({ isActive }) =>
-              `mb-1 flex h-9 items-center gap-2 rounded-[6px] px-3 text-[13px] text-crm-text2 hover:bg-[#F3F4F6] ${
-                isActive ? 'bg-[#EFF6FF] text-crm-primary' : ''
+              `mb-0.5 flex h-10 items-center gap-2.5 rounded-crm px-3 text-[13px] transition-all duration-150 border-l-2 ${
+                isActive
+                  ? 'bg-slate-800 text-white border-l-sky-400 font-medium'
+                  : 'border-l-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-100'
               }`
             }
           >
-            <Home size={16} />
-            <span>Overview</span>
+            <Home size={17} className="shrink-0 opacity-90" />
+            <span className="truncate">Overview</span>
           </NavLink>
           <NavLink
             to="/admin/dealers"
+            end
             className={({ isActive }) =>
-              `mb-1 flex h-9 items-center gap-2 rounded-[6px] px-3 text-[13px] text-crm-text2 hover:bg-[#F3F4F6] ${
-                isActive ? 'bg-[#EFF6FF] text-crm-primary' : ''
+              `mb-0.5 flex h-10 items-center gap-2.5 rounded-crm px-3 text-[13px] transition-all duration-150 border-l-2 ${
+                isActive
+                  ? 'bg-slate-800 text-white border-l-sky-400 font-medium'
+                  : 'border-l-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-100'
               }`
             }
           >
-            <Database size={16} />
-            <span>Dealers</span>
+            <Database size={17} className="shrink-0 opacity-90" />
+            <span className="truncate">Dealers</span>
           </NavLink>
           <NavLink
             to="/admin/dealers/new"
             className={({ isActive }) =>
-              `mb-1 flex h-9 items-center gap-2 rounded-[6px] px-3 text-[13px] text-crm-text2 hover:bg-[#F3F4F6] ${
-                isActive ? 'bg-[#EFF6FF] text-crm-primary' : ''
+              `mb-0.5 flex h-10 items-center gap-2.5 rounded-crm px-3 text-[13px] transition-all duration-150 border-l-2 ${
+                isActive
+                  ? 'bg-slate-800 text-white border-l-sky-400 font-medium'
+                  : 'border-l-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-100'
               }`
             }
           >
-            <Plus size={16} />
-            <span>Add Dealer</span>
+            <Plus size={17} className="shrink-0 opacity-90" />
+            <span className="truncate">Add Dealer</span>
           </NavLink>
         </nav>
-        <div className="px-3 py-3 border-t border-crm-border">
+        <div className="mt-auto border-t border-slate-800 px-2 py-3">
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-[6px] border border-crm-border bg-white px-3 py-2 text-[12px] text-crm-text2 hover:bg-[#F3F4F6]"
+            className="crm-press flex h-10 w-full items-center gap-2.5 rounded-crm px-3 text-[13px] text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
           >
-            <LogOut size={14} />
+            <LogOut size={17} />
             <span>Logout</span>
           </button>
         </div>
       </aside>
-      <main className="flex-1 ml-0">
-        <div className="px-6 py-5">
+      <div className="pl-[248px]">
+        <main className="crm-main px-6 py-6">
           <Outlet />
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
-

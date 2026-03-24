@@ -3,19 +3,311 @@ If the caller explicitly asks to speak to a human, agent, representative, operat
 Otherwise return FALSE.
 
 Ngrok Server:
-ngrok http --domain=nondecorative-unmagically-erminia.ngrok-free.dev 5000 This is command use to restart it
+ngrok http 5000
+(This is the command to restart ngrok; current URL below.)
 
+Current forwarding: https://f86a-2400-adc5-128-4000-482-9d44-99d-b06e.ngrok-free.app -> http://localhost:5000
 
-Retell Webhook
-https://nondecorative-unmagically-erminia.ngrok-free.dev/api/retell-events
+Retell Webhook (paste this in Retell Dashboard):
+https://f86a-2400-adc5-128-4000-482-9d44-99d-b06e.ngrok-free.app/api/retell-events
 
+========== WHAT YOU NEED IN RETELL (CHECKLIST) ==========
 
+1) AGENT-LEVEL WEBHOOK
+   - In your agent's Global Settings / Webhook: set the Agent Webhook URL to the same as above (.../api/retell-events). So call events (transcript, call_ended, call_analyzed) are sent to your backend.
+
+2) PHONE NUMBER – INBOUND WEBHOOK (for real phone calls)
+   - Phone Numbers → select your number (e.g. +14374940150) → turn ON "Add an inbound webhook" and set URL to .../api/retell-events.
+   - Without this, dealer_id and caller_number are not saved for phone calls.
+
+3) CUSTOM FUNCTIONS TO ADD (Select Function → add these)
+   - Open_status_For_Sale / Open_status_For_service / open_Status_for_Parts: GET your .../api/dealer-open-status/{dealer_phone}/{department} so the agent knows if a department is open.
+   - Get_dealer_Config: GET .../api/dealer-config/{did}. Use the call's DID (e.g. to_number or a variable). In "Store Fields as Variables" map: service_transfer_phone -> service_transfer_phone, sales_transfer_phone -> sales_transfer_phone, parts_transfer_phone -> parts_transfer_phone, dealer_name -> dealer_name. Required so that Transfer Call node's "Transfer to" Dynamic Routing {{service_transfer_phone}} has a value.
+   - Check_Availability_Of_Service: POST .../api/service-booking/check-availability. Payload: args only. Store: available, speakable, message, reason, available_slots.
+   - Book_the_Service: POST .../api/service-booking/book. Payload: args only. Store: success, speakable, message, slot.
+
+4) BOOK_THE_SERVICE – ARGUMENTS THE AGENT MUST SEND
+   Required: dealer_phone, preferred_date, preferred_time.
+   Optional (add as function arguments so the LLM can send them): customer_name, customer_phone, customer_email, vehicle_make, vehicle_model, vehicle_year, notes.
+   In Retell, define these as arguments for Book_the_Service so that when your flow collects customer_name, customer_phone, customer_email, vehicle_type / vehicle_make, vehicle_model, vehicle_year (e.g. via Extract Variables nodes), they are passed into the function call and saved in the database.
+
+5) FLOW NODES (like in your screenshots)
+   - Use "Conversation" nodes to ask for name, phone, email, vehicle make/model/year.
+   - Use "Extract Variables" nodes after each step to capture: customer_name, customer_phone, customer_Email (or customer_email), vehicle_make, vehicle_model, vehicle_year.
+   - Before calling Book_the_Service, ensure those variables are set; the LLM will pass them as function arguments. Match variable names to the API: customer_email, vehicle_make, vehicle_model, vehicle_year.
+
+6) TRANSITIONS
+   - Use transitions like "{{customer_name}} exists" / "Else" to move on when a variable is captured, or loop back to re-ask.
+   - For service booking: after Check_Availability_Of_Service, use "available" and "speakable" in your next node; then collect name/phone/email/vehicle and call Book_the_Service with all collected args.
+
+7) BACKEND .ENV (on your server, not Retell)
+   - RETELL_INBOUND_NUMBER=+14374940150 and RETELL_INBOUND_DEALER_ID=1 so calls are linked to the right dealer.
+
+--- Centralize transfer: one Global Node, no transfer offer in Sales/Service/Parts end ---
+
+Use a single Global Node when the user says they want to talk to a dealer. Do NOT offer transfer at the end of Sales, Service, or Parts flows.
+
+A) PROMPT CHANGES (paste these into each Conversation node)
+
+1) Sales end prompt (replace entire prompt)
+---
+You are closing the conversation after collecting the customer's information.
+The customer's name is {{customer_name}}.
+
+Follow this process:
+1. Thank the customer and confirm that the required information has been collected.
+   Example: "Thank you for your time, {{customer_name}}. We have successfully collected the information we needed, and our team will review your request and contact you shortly."
+2. Do NOT offer to connect with a sales team member. Simply close the conversation.
+   Example: "Thank you again for your time. Our team will contact you soon. Have a great day."
+
+Rules: Speak professionally and politely. Keep the tone friendly and helpful. Do not ask if they want to be transferred or connected to anyone.
+---
+
+2) Service end prompt (replace entire prompt)
+---
+You are closing a conversation with a customer who requested vehicle service information or attempted to schedule a service appointment.
+The customer's name is {{customer_name}}.
+Speak in a polite, professional, and friendly tone, similar to a dealership receptionist.
+
+Conversation Closing Process:
+1. Thank the customer for their time. Example: "Thank you for your time, {{customer_name}}."
+2. If the customer indicated they may visit later or schedule another time, acknowledge that politely. Example: "We completely understand. Whenever you're ready to schedule your service, we'll be happy to assist you."
+3. Let them know the dealership is available whenever they are ready. Example: "If you need any assistance later, please feel free to contact us anytime."
+4. Do NOT offer to connect them with a service team member. Simply close.
+   Example: "We look forward to assisting you whenever you're ready. Have a wonderful day."
+
+Tone: polite, friendly, patient, professional. Use natural language. Do not ask if they want to be transferred or connected to anyone.
+---
+
+3) Parts end prompt (replace entire prompt)
+---
+You are closing a conversation with a customer who requested vehicle parts.
+The customer's name is {{customer_name}}.
+
+Follow this process:
+1. Thank the customer. Example: "Thank you for your time, {{customer_name}}."
+2. Confirm the parts request has been collected. Example: "We have collected the details about the parts you are looking for."
+3. Inform them the parts team will contact them. Example: "Our parts department will review your request and will contact you shortly regarding availability and next steps."
+4. Do NOT offer to connect them with a parts or sales team member. Simply close.
+   Example: "Thank you again for your time, {{customer_name}}. Our parts team will contact you soon. Have a great day."
+
+Rules: Speak professionally and politely. Do not ask if they want to be transferred or connected to anyone.
+---
+
+B) NODES TO REMOVE (in each flow)
+
+- Sales flow: Remove the "Sales_Transfer Call" node. Remove the transition from the Sales end Conversation that says "Return true if the customer agrees or expresses interest in being connected to a sales team member..." (delete that conditional transition entirely).
+- Service flow: Remove the "Service_Transfer Call" node. Remove the transition from the Service end Conversation that says "Return true if the customer agrees or expresses interest in being connected to a service team member..." (delete that conditional transition entirely).
+- Parts flow: Remove the "Parts_Transfer Call" node. Remove the transition from the Parts end Conversation that says "Return true if the customer clearly asks to be connected to a Parts team member..." (delete that conditional transition entirely).
+
+C) RECONNECT EACH END PROMPT TO END CALL ONLY
+
+- Sales end Conversation: Have only one exit — e.g. "Skip User Response" or "Else" — and connect it directly to "End Call". No branch to any transfer node.
+- Service end Conversation: Same — one exit to "End Call" only.
+- Parts end Conversation: Same — one exit to "End Call" only.
+
+D) GLOBAL NODE CONFIGURATION (when user says they want to talk to dealer)
+
+1) Trigger for the Global Node
+   - In Retell, the Global Node must be set to trigger when the user says they want to speak to a human/dealer/representative (e.g. "talk to a person", "transfer me", "connect me to someone"). You likely have a condition or interrupt that jumps to this Global Node when such intent is detected.
+
+2) Global Node conversation (you already have this)
+   - Text: "Thank you. No problem at all. I will connect you with a member of our team who can assist you further. Please hold for a moment while I transfer your call to a representative."
+
+3) Add one Transfer Call node after the Global Node
+   - From the Global Node, add a single "Transfer Call" node (e.g. name it "Dealer_Transfer_Call" or reuse one of the existing transfer nodes).
+   - Connect: Global Node → "Skip User Response" → this Transfer Call node.
+   - Transfer Call node settings:
+     - Transfer to: Dynamic Routing, value {{service_transfer_phone}} (or use {{sales_transfer_phone}} / {{parts_transfer_phone}} if you prefer; ensure Get_dealer_Config has stored that variable).
+     - Format to E.164: ON. Warm Transfer is fine.
+   - Transfer success: the call is handed off (flow can end).
+   - Transfer failed: connect "Transfer failed" → your existing "Conversation" node ("technical issue right now, we will call back...") → End Call.
+
+4) Ensure {{service_transfer_phone}} is set before the Global Node runs
+   - Either run Get_dealer_Config at the very start of the call (e.g. first node in Main Flow that calls GET .../api/dealer-config?did={{to_number}} and stores service_transfer_phone), or add a Function node between Global Node and the Transfer Call node that calls Get_dealer_Config, then connect that Function node’s output to the Transfer Call node.
+
+Summary: Remove all “would you like me to connect you?” from Sales/Service/Parts end prompts; remove the three department-specific Transfer Call nodes and their conditional transitions; connect each end prompt only to End Call. Use one Global Node (triggered when user asks for a dealer) → one Transfer Call node (dynamic {{service_transfer_phone}}) → on failure, technical issue message → End Call.
+
+--- Transfer call to dealer (Retell Transfer Call node) ---
+
+--- 1) Why "technical issue" / transfer fails when testing static number ---
+
+If you use a static number (e.g. +923244983583) and the flow always goes to "Transfer failed" → "we have a technical issue", common causes:
+
+- Retell/carrier cannot reach that number (e.g. region not supported, number not verified, or blocked).
+- Number format: use E.164 with country code (e.g. +923244983583). Enable "Format to E.164" in the node.
+- Test Agent (Simulation): transfer often does not actually connect in simulation; the engine may treat it as "failed" and follow the "Transfer failed" transition. So you may see "technical issue" even when the config is correct.
+- Real phone call: to test static transfer for real, place a real call to your Retell number (from another phone), go through the flow until the transfer runs, and ensure the destination number is a real, reachable phone (same country as your Retell number is usually more reliable). If it still fails, check Retell dashboard logs for the transfer failure reason.
+
+To test static transfer without hitting "technical issue" in Simulation: you can temporarily change the "Transfer failed" transition so it does not go to the "technical issue" conversation (e.g. disconnect or retry), or accept that Simulation may not complete the transfer and test with a real call instead.
+
+--- 2) Complete steps to make transfer DYNAMIC (per-dealer transfer number) ---
+
+Step A – Create the Get_dealer_Config function in Retell
+
+1. In Retell: open your agent → go to the "Function" (or "Custom Function") list and add a new function.
+2. Name: Get_dealer_Config (or any name you like).
+3. Method: GET.
+4. URL (choose one; replace YOUR_BACKEND_URL with your real backend, e.g. ngrok or your domain):
+   - Option 1 (query param, easiest in Retell): 
+     https://YOUR_BACKEND_URL/api/dealer-config?did={{to_number}}
+   - Option 2 (path param): 
+     https://YOUR_BACKEND_URL/api/dealer-config/{{to_number}}
+   Use whatever variable Retell provides for the inbound call number (often to_number or similar; check Retell’s docs for "call context" or "variables in function URL").
+5. Timeout: 10000 (10 seconds) is enough.
+6. Store Fields as Variables (map response JSON path → Retell variable name):
+   - service_transfer_phone  →  service_transfer_phone
+   - sales_transfer_phone    →  sales_transfer_phone
+   - parts_transfer_phone    →  parts_transfer_phone
+   - dealer_name             →  dealer_name  (optional)
+   The backend returns these flat fields; the first three come from departments named "Service", "Sales", "Parts".
+
+Step B – Add a Function node in the flow (before the Transfer Call node)
+
+1. In the flow canvas, add a "Function" node.
+2. Place it so it runs before "Service_Transfer_Call" (e.g. after "Begin" or after the conversation that decides to transfer to service). Connect: the node that decides "customer wants service transfer" → this Function node → "Service_Transfer_Call".
+3. In the Function node settings, select the function you created: Get_dealer_Config.
+4. If Retell asks for "arguments" or "parameters": pass the DID. Often the URL already contains {{to_number}}; if your platform uses a different variable for the inbound number, use that in the URL (e.g. {{phone_number}} or {{did}}). No body needed for GET.
+5. Ensure the transition from this Function node goes to "Service_Transfer_Call" (so the variables are set before the transfer runs).
+
+Step C – Configure the Transfer Call node for dynamic routing
+
+1. Open the "Service_Transfer_Call" node settings.
+2. Under "Transfer to", switch from "Static Destination" to "Dynamic Routing".
+3. In the Dynamic Routing field, enter: {{service_transfer_phone}}
+4. Keep "Format to E.164" enabled.
+5. Leave the rest as you prefer (Warm Transfer, Displayed Caller ID: Retell Agent's Number, 30s ring, etc.).
+
+--- 3) Get_dealer_Config exact changes, Dynamic Routing prompt, Transfer transitions ---
+
+A) Get_dealer_Config – what to change
+
+1) API Endpoint URL
+   - Do NOT hardcode the phone number. Use the call’s DID so each call gets the right dealer.
+   - Change FROM: https://YOUR_NGROK/api/dealer-config/+923137633702
+   - Change TO:   https://YOUR_NGROK/api/dealer-config?did={{to_number}}
+   (Replace YOUR_NGROK with your ngrok URL. If Retell uses a different variable for the inbound number, use that instead of to_number, e.g. {{phone_number}} or {{did}}.)
+
+2) Store Fields as Variables
+   - The backend returns flat fields at the top level, not inside departments[0/1/2]. Use these exact mappings (left = variable name in Retell, right = path in API response):
+     dealer_name             →  dealer_name
+     primary_phone           →  primary_phone   (or store as dealer_phone if you prefer)
+     service_transfer_phone  →  service_transfer_phone
+     sales_transfer_phone    →  sales_transfer_phone
+     parts_transfer_phone    →  parts_transfer_phone
+   - Remove any mappings that use departments[0], departments[1], departments[2] – the API now returns service_transfer_phone, sales_transfer_phone, parts_transfer_phone directly.
+
+3) Timeout
+   - 10000 ms (10 seconds) is enough. 120000 is not required.
+
+B) Dynamic Routing – prompt / value to use
+
+- If the Transfer Call node has a single field for “Dynamic Routing” (variable only): put exactly:
+  {{service_transfer_phone}}
+- If it has a “prompt” or “instruction” field for dynamic routing, use this text:
+  Transfer the call to the dealer’s service transfer number. Use the value of the variable service_transfer_phone as the destination. It is already set by Get_dealer_Config; do not use any other number.
+- If Retell expects a variable in a dropdown, select or type: service_transfer_phone (so the node uses {{service_transfer_phone}}).
+
+C) Transfer Call node – transitions and where each link goes
+
+- Transition (success path)
+  - When the transfer succeeds, the call is handed off to the dealer. There is no further in-agent flow.
+  - Link: “Transition” (or “Success”) → End Call.
+  - (Or leave it unconnected if Retell ends the call automatically on successful transfer.)
+
+- Transfer failed
+  - When the transfer fails (e.g. no answer, busy, invalid number), use your existing error message.
+  - Link: “Transfer failed” → Conversation node (the one that says: “Tell user there’s a technical issue right now, we will call back in a bit. End the call politely.”).
+  - Then from that Conversation node: “Skip User Response” (or its single transition) → End Call.
+
+Summary of links:
+  Global Node → “Skip User Response” → Get_dealer_Config (Function node) → Transfer Call node
+  Transfer Call — “Transition” (success) → End Call
+  Transfer Call — “Transfer failed” → “Technical issue” Conversation → “Skip User Response” → End Call
+
+Step D – Backend and data
+
+- Your backend must be reachable from Retell (e.g. ngrok or public URL). GET /api/dealer-config?did=+923137633702 (or your dealer’s primary_phone) should return JSON with service_transfer_phone, sales_transfer_phone, parts_transfer_phone.
+- In Admin (Dealers → [dealer] → departments): the department named "Service" must have "Transfer Phone" set to the number that should receive service transfers. That value is what appears as service_transfer_phone in the API and in Retell.
+
+Step E – How to test dynamic transfer
+
+- Simulation: Run the flow; confirm the Function node runs and that the variables (e.g. service_transfer_phone) are set. The actual transfer may still not connect in Simulation.
+- Real call: Call your Retell number, go through the flow until you reach the service transfer. The call should transfer to the number returned by Get_dealer_Config for that call’s DID (to_number). If it goes to "technical issue", check Retell logs and that the DID used in the API matches a dealer in your database with a Service department transfer phone set.
+
+--- Link calls to the correct dealer (dealer_id in calls & service_appointments) ---
+
+1) Enable inbound webhook on your Retell phone number (required for dealer_id and caller number)
+   - In Retell: Phone Numbers → select your number (e.g. +14374940150 "Happy Client") → turn ON "Add an inbound webhook".
+   - Set the webhook URL to the same as above: .../api/retell-events.
+   - Without this, the backend never receives to_number/from_number, so dealer_id, did, and caller_number stay NULL in the calls table.
+   - After enabling, restart your backend and make a test call. Check the backend terminal for lines like:
+     [Retell] call_started call_id=... to_number=+14374940150 from_number=***702
+     If you see "(missing)" for to_number or from_number, Retell is not sending them; ensure the *phone number* (not only the agent) has the inbound webhook set.
+
+3) Web calls (browser/widget) – no phone numbers
+   - If you use "Test Agent" or the web widget, Retell sends call_type: 'web_call' and does NOT send to_number/from_number. The backend now assigns a default dealer_id for these calls using RETELL_INBOUND_DEALER_ID (or RETELL_DEFAULT_DEALER_ID). So web calls will still get dealer_id=1 (Pakistan Demo Dealer) and show in that dealer's CRM. did and caller_number stay NULL for web calls.
+
+2) Map the Retell number to a dealer (backend .env)
+   - Right now you have one number (+14374940150). All calls to it are treated as belonging to one dealer.
+   - In backend .env add (Pakistan Demo Dealer has id=1 in the dealers table):
+     RETELL_INBOUND_NUMBER=+14374940150
+     RETELL_INBOUND_DEALER_ID=1
+  - When a call comes in, the backend uses to_number from Retell and sets calls.dealer_id and calls.did/caller_number. Service appointments created during the call also get dealer_id from the dealer_phone used in the booking function.
+  - Dealer email for notifications: add a contact_email column to the dealers table (see "Email notifications" below) and set each dealer's email so they receive "new request" emails.
+  - For multiple numbers later, use one of these:
+     - Same two vars for a single number, or
+     - RETELL_INBOUND_MAP=+14374940150:1,+1234567890:2 (phone:dealer_id per number).
+
+--- Service booking: separate CHECK then BOOK (what to do in Retell) ---
+
+STEP 1 – Check_Availability_Of_Service custom function
+  Name: Check_Availability_Of_Service
+  Method: POST
+  URL: https://f86a-2400-adc5-128-4000-482-9d44-99d-b06e.ngrok-free.app/api/service-booking/check-availability
+  Timeout: 120000
+  Turn ON "Payload: args only" (so the backend gets dealer_phone, preferred_date, preferred_time from the LLM).
+  In "Store Fields as Variables" add these (left = variable name in Retell, right = path in API response):
+    available     ->  available
+    speakable     ->  speakable
+    message       ->  message
+    reason        ->  reason
+    available_slots -> available_slots
+  (available_slots is the list of alternative times when the requested slot is not free; the agent can read these and suggest them to the caller.)
+
+STEP 2 – Book_the_Service custom function
+  Name: Book_the_Service
+  Method: POST
+  URL: https://f86a-2400-adc5-128-4000-482-9d44-99d-b06e.ngrok-free.app/api/service-booking/book
+  Timeout: 120000
+  Turn ON "Payload: args only".
+  In "Store Fields as Variables" add:
+    success   ->  success
+    speakable ->  speakable
+    message   ->  message
+    slot      ->  slot
+
+STEP 3 – PreferredDateTeime node (your flow)
+  After the agent calls Check_Availability_Of_Service, the agent MUST use the stored response:
+  - If available is true: say the speakable (e.g. "Yes, we have availability at 11:00 AM on that day. Shall I book it for you?") then ask to book and collect customer_name, customer_phone, then call Book_the_Service.
+  - If available is false: say the speakable (e.g. "Sorry, that time is already booked. Would you like a different time?") then offer times from available_slots (each has date, time, display_time). When the customer picks a new time, update preferred_time and call Check_Availability_Of_Service again for that time; repeat until available then book.
+  In the node prompt, tell the agent to "After calling Check_Availability_Of_Service, always say the value of {{speakable}} to the customer so they hear the result. Then if available is true ask if they want to book and collect name and phone; if available is false, suggest the times in available_slots."
+
+Parameter format the LLM must send (backend accepts these):
+  dealer_phone: use the same number as the dealership (e.g. +923137633702 or 03137633702; both work).
+  preferred_date: YYYY-MM-DD (e.g. 2026-03-16) or natural like "March 16 2026".
+  preferred_time: "11:00 AM" or "11 AM" (both work).
+  customer_name, customer_phone: optional; collected before booking.
+  customer_email: optional; if the agent asks for email, send it as customer_email so it is saved in service_appointments.
+  vehicle_make, vehicle_model, vehicle_year: optional; if the agent asks for vehicle info, send these (e.g. "Toyota", "Camry", "2022") so they are saved in service_appointments.
+  notes: optional; service request or extra notes.
+  (Backend now saves customer_email, vehicle_make, vehicle_model, vehicle_year to the database when you pass them in the Book_the_Service payload.)
 
 Thank you for calling.{{dealer_name}}
 This is Cimo, your virtual assistant.
 Are you calling about Sales, Service, Parts, or something else today?
 
-https://nondecorative-unmagically-erminia.ngrok-free.dev/api/dealer-open-status/+923137633702/sales
+https://f86a-2400-adc5-128-4000-482-9d44-99d-b06e.ngrok-free.app/api/dealer-open-status/+923137633702/sales
 This Function will load open hours status for specific Dealer
 When User is angry or request a human agent.
 
@@ -62,3 +354,75 @@ If the caller says anything similar that clearly indicates they want to speak wi
 Credetianl List:
 retelluser1
 StrongPassword123
+
+--- Admin login ---
+
+Admin login (at /admin/login) checks credentials against the backend .env. Set in backend/.env:
+  ADMIN_ID=Admin
+  ADMIN_PASSWORD=Admin12345
+(Use your own values; only these will be accepted. Restart the backend after changing.)
+
+--- Dealer login (CRM sign-in with password) ---
+
+Dealers sign in with their primary phone (DID) and a password. The password is set by an admin.
+
+Where to set the password for Pakistan Demo Dealer (or any dealer):
+  1) Log in to the Admin dashboard (Admin ID + Admin password from server .env).
+  2) Go to Dealers → click "Pakistan Demo Dealer" (or the dealer you want).
+  3) In the "Dealer info" section, find "Dealer login password".
+  4) Enter a new password (e.g. Demo2026) and click "Save Dealer Info".
+  5) The dealer can then open the CRM login page, enter primary phone (e.g. +9231376337image.png02) and that password, and click Sign in.
+
+Database: The backend stores a hashed password in dealers.password_hash. If the column is missing, run in Supabase SQL Editor:
+  See backend/scripts/add-dealer-password.sql (ALTER TABLE dealers ADD COLUMN IF NOT EXISTS password_hash TEXT;).
+
+If you see "Could not find the 'password_hash' column of 'dealers' in the schema cache":
+  The dealers table does not have the password_hash column yet. In Supabase Dashboard → SQL Editor, run this once:
+    ALTER TABLE public.dealers ADD COLUMN IF NOT EXISTS password_hash TEXT;
+  Then wait a few seconds and try saving the dealer again (set "Dealer login password" and click Save).
+
+--- Email notifications (customer + dealer) ---
+
+When a request or call is received, the backend can send:
+  - To customer: "Your request has been received. [Dealer] will get back to you." (and appointment details if it was a service booking).
+  - To dealer: "New request received" with customer name, phone, email, summary, and appointment/vehicle info.
+
+When emails are sent:
+  1) After a service booking (Book_the_Service): if the booking payload had customer_email and/or the dealer has contact_email in the database.
+  2) After call_analyzed (when Retell sends call analysis): if the analysis has customer email and/or the call is linked to a dealer that has contact_email.
+
+Setup:
+  1) Add dealer contact email in Supabase: run this SQL once in Supabase SQL Editor (Table Editor → dealers → New column also works):
+       ALTER TABLE dealers ADD COLUMN IF NOT EXISTS contact_email TEXT;
+     Then set contact_email for each dealer (e.g. in Table Editor) so they receive "new request" emails.
+  2) Configure SMTP in backend .env (uncomment and set):
+       SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+       Optional: SMTP_SECURE=true, EMAIL_FROM_NAME, EMAIL_FROM_EMAIL
+     If SMTP is not set, the app still runs; emails are skipped and a short warning is logged.
+
+--- Service appointments & Inbox (real calls) ---
+
+1) dealer_id in service_appointments: If your dealers table uses numeric id (e.g. 1) but service_appointments.dealer_id was created as UUID, inserts can fail and dealer_id stays NULL. Run in Supabase SQL Editor (once):
+     See backend/scripts/fix-service-appointments-dealer-id.sql — alter dealer_id to TEXT so "1" is stored and appointments link to the dealer. After this, new bookings will have dealer_id set and show in CRM.
+
+2) Book_the_Service dealer_phone: The agent can send either the dealer’s primary_phone (e.g. +923137633702) or the Retell inbound number (+14374940150). If it sends the Retell number, the backend maps it to the dealer using RETELL_INBOUND_NUMBER and RETELL_INBOUND_DEALER_ID so the booking still succeeds.
+
+3) Inbox and new calls: The dashboard loads calls by dealer_id and merges call_analysis (customer name, intent, outcome) when available. Ensure the CRM is opened with the correct dealer (e.g. ?dealer_phone=+923137633702 for Pakistan Demo Dealer). New real calls appear under "All activity"; unread count updates when you open a call or mark as read.
+
+4) Intent/outcome on calls: When Retell sends call_analyzed, the backend backfills the calls row with intent (category) and outcome. Ensure the Agent Webhook URL is set so call_analyzed events reach your backend; then the Calls list and Inbox will show intent and outcome after the call ends.
+
+--- When a call goes to Callback Requests vs User Hangups ---
+
+Callback Requests (CRM → Callback Requests):
+  A call appears here when the call is categorized as "callback". The backend sets this when Retell sends call_analyzed with EITHER:
+  - custom_analysis_data.Call_Back_Capture set (e.g. true or a value), OR
+  - collected_dynamic_variables.Call_Back_Capture set, OR
+  - Reason_for_call (or service_request) containing the word "callback".
+  So: use a Retell flow that captures "callback" or "request callback" and sets Call_Back_Capture (or a variable you map to Reason_for_call as "callback"). Then the call will show under Callback Requests.
+
+User Hangups (CRM → User Hangups):
+  A call appears here when the caller (user) hung up. The backend sets this when Retell sends call_analyzed with:
+  - disconnection_reason containing "user" (e.g. "user_hangup", "user_hangup_timeout").
+  So: any call that ends because the user hung up (not the agent or system) will have is_user_hangup = true and show under User Hangups.
+
+Note: A single call can be both a callback and a user hangup (e.g. user requested callback then hung up). It will then appear in BOTH Callback Requests and User Hangups. The dashboard uses call_analysis.category for "callback" and call_analysis.is_user_hangup for "User Hangups".

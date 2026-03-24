@@ -11,16 +11,30 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     let errorBody;
+    const contentType = res.headers.get('content-type') || '';
     try {
-      errorBody = await res.json();
+      if (contentType.includes('application/json')) {
+        errorBody = await res.json();
+      } else {
+        errorBody = {};
+      }
     } catch {
-      throw new Error(`Request failed with status ${res.status}`);
+      errorBody = {};
     }
-    throw new Error(errorBody.error || `Request failed with status ${res.status}`);
+    const message = errorBody.error || (res.status === 404 ? 'Service not found. Is the backend running on port 5000?' : `Request failed with status ${res.status}`);
+    throw new Error(message);
   }
 
   if (res.status === 204) return null;
   return res.json();
+}
+
+// Dealer login (phone + password)
+export function apiDealerLogin(dealer_phone, password) {
+  return request('/dealer-login', {
+    method: 'POST',
+    body: JSON.stringify({ dealer_phone, password })
+  });
 }
 
 // Dealers
@@ -96,6 +110,12 @@ export function apiGetCallTranscripts(callId) {
 
 export function apiGetCallTransfers(callId) {
   return request(`/calls/${callId}/transfers`);
+}
+
+export function apiGetTransfers(params = {}) {
+  const search = new URLSearchParams(params);
+  const q = search.toString();
+  return request(`/transfers${q ? `?${q}` : ''}`);
 }
 
 export function apiGetCallCallbackLogs(callId) {

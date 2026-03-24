@@ -8,6 +8,7 @@ import {
   apiGetCallTransfers,
   apiGetCalls
 } from '../api.js';
+import { DateTimePicker } from './ui/DateTimePicker';
 
 export function CallsPanel() {
   const [calls, setCalls] = useState([]);
@@ -36,8 +37,8 @@ export function CallsPanel() {
       const params = {};
       if (filters.outcome_code) params.outcome_code = filters.outcome_code;
       if (filters.dealer_id) params.dealer_id = filters.dealer_id;
-      if (filters.from) params.from = filters.from;
-      if (filters.to) params.to = filters.to;
+      if (filters.from) params.from = new Date(filters.from).toISOString();
+      if (filters.to) params.to = new Date(filters.to).toISOString();
       const data = await apiGetCalls(params);
       setCalls(data || []);
       if (data && data.length > 0 && !selectedCallId) {
@@ -133,20 +134,24 @@ export function CallsPanel() {
               <option value="failed">Failed</option>
             </select>
           </div>
-          <div className="field">
+          <div className="field" style={{ minWidth: 180 }}>
             <label>From</label>
-            <input
-              type="datetime-local"
+            <DateTimePicker
               value={filters.from}
-              onChange={(e) => handleFilterChange('from', e.target.value)}
+              onChange={(v) => handleFilterChange('from', v)}
+              placeholder="mm/dd/yyyy —:— —"
+              id="calls-panel-from"
+              placement="below"
             />
           </div>
-          <div className="field">
+          <div className="field" style={{ minWidth: 180 }}>
             <label>To</label>
-            <input
-              type="datetime-local"
+            <DateTimePicker
               value={filters.to}
-              onChange={(e) => handleFilterChange('to', e.target.value)}
+              onChange={(v) => handleFilterChange('to', v)}
+              placeholder="mm/dd/yyyy —:— —"
+              id="calls-panel-to"
+              placement="below"
             />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>

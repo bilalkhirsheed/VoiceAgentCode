@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiAdminListDealers, apiAdminDeleteDealer } from '../../api';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { useToast } from '../../contexts/ToastContext';
 
 export function AdminDealersListPage() {
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,7 +29,9 @@ export function AdminDealersListPage() {
         setDealers(res.items || []);
         setTotal(res.total || 0);
       } catch (e) {
-        setError(e.message || 'Failed to load dealers');
+        const msg = e.message || 'Failed to load dealers';
+        setError(msg);
+        toast.error(msg);
       } finally {
         setLoading(false);
       }
@@ -46,95 +50,97 @@ export function AdminDealersListPage() {
       await apiAdminDeleteDealer(id);
       setDealers((prev) => prev.filter((d) => d.id !== id));
       setTotal((t) => Math.max(0, t - 1));
+      toast.success('Dealer deleted.');
     } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e.message || 'Failed to delete dealer');
+      toast.error(e.message || 'Failed to delete dealer');
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-[18px] font-semibold text-crm-text">Dealers</h1>
-          <p className="text-[13px] text-crm-text2">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="crm-page-header">
+          <h1 className="crm-page-title">Dealers</h1>
+          <p className="crm-page-subtitle">
             Search, add, edit, or delete dealerships configured for the AI agent.
           </p>
         </div>
         <Link
           to="/admin/dealers/new"
-          className="rounded-[6px] bg-crm-primary px-3 py-2 text-[13px] font-medium text-white hover:bg-blue-700"
+          className="crm-press inline-flex items-center justify-center rounded-[8px] border border-sky-600 bg-sky-600 px-3 py-2 text-[13px] font-medium text-white hover:bg-sky-500"
         >
           Add Dealer
         </Link>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex-1 max-w-xs">
           <input
             type="text"
             placeholder="Search by name or phone…"
-            className="w-full rounded-[6px] border border-crm-border px-3 py-2 text-[13px]"
+            className="w-full rounded-[6px] border border-slate-600 bg-slate-800 px-3 py-2 text-[13px] text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="text-[12px] text-crm-text2">
+        <div className="text-[12px] text-slate-400">
           {loading ? 'Loading…' : `Total dealers: ${total}`}
         </div>
       </div>
 
       {error && (
-        <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+        <div className="rounded-[10px] border border-red-900/70 bg-red-950/40 px-3 py-2 text-[12px] text-red-300">
           {error}
         </div>
       )}
 
-      <div className="rounded-[8px] border border-crm-border bg-white overflow-hidden">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Name</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Primary Phone</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Timezone</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-700">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {dealers.map((d) => (
-              <tr key={d.id}>
-                <td className="px-4 py-2 text-gray-900">{d.dealer_name}</td>
-                <td className="px-4 py-2 text-gray-700">{d.primary_phone || '—'}</td>
-                <td className="px-4 py-2 text-gray-700">{d.timezone || '—'}</td>
-                <td className="px-4 py-2 text-gray-700 space-x-2">
-                  <Link
-                    to={`/admin/dealers/${d.id}`}
-                    className="text-[12px] text-crm-primary hover:underline"
-                  >
-                    View / Edit
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => openDeleteConfirm(d.id)}
-                    className="text-[12px] text-red-600 hover:underline"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!loading && dealers.length === 0 && (
+      <div className="crm-section-card overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="crm-table min-w-full text-sm">
+            <thead>
               <tr>
-                <td
-                  colSpan={4}
-                  className="px-4 py-6 text-center text-[13px] text-gray-400"
-                >
-                  No dealers found.
-                </td>
+                <th>Name</th>
+                <th>Primary Phone</th>
+                <th>Timezone</th>
+                <th>Actions</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {dealers.map((d) => (
+                <tr key={d.id}>
+                  <td className="text-slate-100">{d.dealer_name}</td>
+                  <td className="text-slate-300">{d.primary_phone || '—'}</td>
+                  <td className="text-slate-300">{d.timezone || '—'}</td>
+                  <td className="text-slate-300 space-x-2">
+                    <Link
+                      to={`/admin/dealers/${d.id}`}
+                      className="text-[12px] font-medium text-sky-400 hover:text-sky-300 hover:underline"
+                    >
+                      View / Edit
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => openDeleteConfirm(d.id)}
+                      className="text-[12px] text-red-400 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!loading && dealers.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-6 text-center text-[13px] text-slate-500 border-r-0"
+                  >
+                    No dealers found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -149,4 +155,3 @@ export function AdminDealersListPage() {
     </div>
   );
 }
-

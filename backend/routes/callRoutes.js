@@ -19,7 +19,8 @@ const {
 } = require('../controllers/callTagController');
 const {
   createCallTransfer,
-  getCallTransfers
+  getCallTransfers,
+  getAllTransfers
 } = require('../controllers/callTransferController');
 const {
   createCallbackLog,
@@ -49,6 +50,7 @@ router.get('/calls/:callId/tags', getCallTags);
 // Transfers
 router.post('/call-transfers', createCallTransfer);
 router.get('/calls/:callId/transfers', getCallTransfers);
+router.get('/transfers', getAllTransfers);
 
 // Callback logs (analytics)
 router.post('/callback-logs', createCallbackLog);

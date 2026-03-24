@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastProvider } from './contexts/ToastContext';
 import { CrmLayout } from './components/crm/CrmLayout';
+import { PlaceholderPage } from './pages/PlaceholderPage';
 import { HomePage } from './pages/HomePage';
 import { CallsPage } from './pages/CallsPage';
 import { CallDetailPage } from './pages/CallDetailPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { DealerEntryPage } from './pages/DealerEntryPage';
 import { HangupsPage } from './pages/HangupsPage';
@@ -13,6 +14,8 @@ import { ServiceAppointmentsPage } from './pages/ServiceAppointmentsPage';
 import { PartsRequestsPage } from './pages/PartsRequestsPage';
 import { DealershipInfoPage } from './pages/DealershipInfoPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { InboxPage } from './pages/InboxPage';
+import { TransfersPage } from './pages/TransfersPage';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLoginPage } from './pages/admin/AdminLoginPage';
 import { AdminDashboardHome } from './pages/admin/AdminDashboardHome';
@@ -23,14 +26,15 @@ import { AdminAddDepartmentPage } from './pages/admin/AdminAddDepartmentPage';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <ToastProvider>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
         <Route path="/" element={<DealerEntryPage />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route
           path="/admin"
           element={
-            window.localStorage.getItem('admin_authenticated') === 'true' ? (
+            window.sessionStorage.getItem('admin_authenticated') === 'true' ? (
               <AdminLayout />
             ) : (
               <Navigate to="/admin/login" replace />
@@ -45,6 +49,7 @@ export default function App() {
         </Route>
         <Route path="/crm" element={<CrmLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="inbox" element={<InboxPage />} />
           <Route path="calls" element={<CallsPage />} />
           <Route path="calls/:callId" element={<CallDetailPage />} />
           <Route path="callback-requests" element={<CallbackRequestsPage />} />
@@ -53,30 +58,15 @@ export default function App() {
           <Route path="parts-requests" element={<PartsRequestsPage />} />
           <Route
             path="transfers"
-            element={
-              <PlaceholderPage
-                title="Transfers"
-                description="Calls transferred to staff (Success / Failed / No Answer / Busy)."
-                note="Built from call_transfers; group by call_id and show result."
-              />
-            }
+            element={<TransfersPage />}
           />
           <Route path="dealership" element={<DealershipInfoPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="hangups" element={<HangupsPage />} />
           <Route path="reports" element={<ReportsPage />} />
-          <Route
-            path="settings"
-            element={
-              <PlaceholderPage
-                title="Settings"
-                description="Roles (Admin / Manager / Viewer) and privacy controls."
-                note="When auth/RBAC is added, enforce field-level hiding here."
-              />
-            }
-          />
         </Route>
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </ToastProvider>
   );
 }

@@ -1,4 +1,5 @@
 const supabase = require('../config/supabaseClient');
+const bcrypt = require('bcryptjs');
 const { dealer, department, departmentHours, holiday } = require('../models');
 const { buildDealerConfig } = require('./dealerController');
 
@@ -38,8 +39,12 @@ async function adminListDealers(req, res) {
       return res.status(500).json({ error: error.message });
     }
 
+    const items = (data || []).map((row) => {
+      const { [dealerCols.password_hash]: _, ...rest } = row;
+      return rest;
+    });
     return res.json({
-      items: data || [],
+      items,
       total: count || 0,
       page,
       pageSize: limit
@@ -106,7 +111,8 @@ async function adminCreateDealer(req, res) {
       [dealerCols.zip_code]: req.body.zip_code || null,
       [dealerCols.website_url]: req.body.website_url || null,
       [dealerCols.default_voice]: req.body.default_voice || 'female',
-      [dealerCols.primary_phone]: primary_phone
+      [dealerCols.primary_phone]: primary_phone,
+      [dealerCols.contact_email]: req.body.contact_email || null
     };
 
     const { data, error } = await supabase
@@ -146,11 +152,16 @@ async function adminUpdateDealer(req, res) {
     const payload = {};
 
     Object.entries(dealerCols).forEach(([key, columnName]) => {
-      if (key === 'id' || key === 'created_at' || key === 'updated_at') return;
+      if (key === 'id' || key === 'created_at' || key === 'updated_at' || key === 'password_hash') return;
       if (body[key] !== undefined) {
         payload[columnName] = body[key];
       }
     });
+
+    if (body.password !== undefined && body.password !== null && body.password !== '') {
+      const hash = await bcrypt.hash(String(body.password), 10);
+      payload[dealerCols.password_hash] = hash;
+    }
 
     const { data, error } = await supabase
       .from(dealerTable)
@@ -167,7 +178,8 @@ async function adminUpdateDealer(req, res) {
       return res.status(404).json({ error: 'Dealer not found' });
     }
 
-    return res.json(data);
+    const { [dealerCols.password_hash]: _, ...safe } = data;
+    return res.json(safe);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -214,7 +226,8 @@ async function adminCreateDepartment(req, res) {
       [deptCols.department_name]: department_name,
       [deptCols.transfer_phone]: req.body.transfer_phone || null,
       [deptCols.transfer_type]: req.body.transfer_type || null,
-      [deptCols.after_hours_action]: req.body.after_hours_action || null
+      [deptCols.after_hours_action]: req.body.after_hours_action || null,
+      [deptCols.contact_email]: req.body.contact_email || null
     };
 
     const { data, error } = await supabase
@@ -241,12 +254,13 @@ async function adminUpdateDepartment(req, res) {
     const deptCols = department.columns;
 
     const payload = {};
-    const { department_name, transfer_phone, transfer_type, after_hours_action } = req.body || {};
+    const { department_name, transfer_phone, transfer_type, after_hours_action, contact_email } = req.body || {};
 
     if (department_name !== undefined) payload[deptCols.department_name] = department_name;
     if (transfer_phone !== undefined) payload[deptCols.transfer_phone] = transfer_phone;
     if (transfer_type !== undefined) payload[deptCols.transfer_type] = transfer_type;
     if (after_hours_action !== undefined) payload[deptCols.after_hours_action] = after_hours_action;
+    if (contact_email !== undefined) payload[deptCols.contact_email] = contact_email;
 
     const { data, error } = await supabase
       .from(deptTable)

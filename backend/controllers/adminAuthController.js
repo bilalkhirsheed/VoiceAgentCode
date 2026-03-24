@@ -1,16 +1,23 @@
-const ADMIN_ID = process.env.ADMIN_ID || process.env.Admin_ID;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.Admin_PASSWORD;
+const ADMIN_ID = (process.env.ADMIN_ID || process.env.Admin_ID || '').trim();
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || process.env.Admin_PASSWORD || '').trim();
 
 function login(req, res) {
   try {
     const { admin_id, admin_password } = req.body || {};
+    const id = (admin_id != null ? String(admin_id) : '').trim();
+    const pw = (admin_password != null ? String(admin_password) : '').trim();
 
-    if (!admin_id || !admin_password) {
-      return res.status(400).json({ error: 'admin_id and admin_password are required' });
+    if (!id || !pw) {
+      return res.status(400).json({ error: 'Admin ID and password are required' });
     }
 
-    // For now, as requested, we do not enforce jsonwebtoken or strict credential checks.
-    // Any non-empty admin_id/admin_password will be accepted and allowed to proceed.
+    const idMatch = id === ADMIN_ID;
+    const passwordMatch = pw === ADMIN_PASSWORD;
+
+    if (!idMatch || !passwordMatch) {
+      return res.status(401).json({ error: 'Invalid Admin ID or password' });
+    }
+
     return res.json({
       success: true
     });

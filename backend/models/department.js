@@ -8,6 +8,7 @@ const departmentSchema = {
     transfer_phone: 'transfer_phone',
     transfer_type: 'transfer_type', // sip / pstn / queue
     after_hours_action: 'after_hours_action', // callback / voicemail
+    contact_email: 'contact_email',
     created_at: 'created_at'
   },
   // Department hours are related via department_id in department_hours table

@@ -11,6 +11,7 @@ const {
 } = require('../controllers/dealerController');
 const { getDealerDashboard } = require('../controllers/dealerDashboardController');
 const { getDealerSummaryReport } = require('../controllers/dealerReportsController');
+const { dealerLogin } = require('../controllers/dealerLoginController');
 const { getDealerDepartments } = require('../controllers/departmentController');
 const {
   dealerUpdateDepartmentHours,
@@ -22,11 +23,17 @@ const {
 
 const router = express.Router();
 
-// Dealer config by DID (phone number) — used by Retell
+// Dealer login (phone + password)
+router.post('/dealer-login', dealerLogin);
+
+// Dealer config by DID (phone number) — used by Retell. Supports /dealer-config/:did or /dealer-config?did=+123
+router.get('/dealer-config', getDealerConfigByDid);
 router.get('/dealer-config/:did', getDealerConfigByDid);
 
 // Dealer open/close status by DID (phone number) and department name
 router.get('/dealer-open-status/:did/:departmentName', getDealerOpenStatusByDid);
+// Retell custom functions sometimes call this as PUT; accept it for robustness.
+router.put('/dealer-open-status/:did/:departmentName', getDealerOpenStatusByDid);
 
 // Dealer CRUD
 router.post('/dealers', createDealer);

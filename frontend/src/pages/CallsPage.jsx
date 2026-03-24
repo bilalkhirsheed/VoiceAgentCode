@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { apiGetCalls } from '../api';
+import { useToast } from '../contexts/ToastContext';
+import { DateTimePicker } from '../components/ui/DateTimePicker';
 
 function formatDuration(seconds) {
   if (seconds == null) return '—';
@@ -11,9 +13,15 @@ function formatDuration(seconds) {
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
 }
 
+function formatOutcome(code) {
+  if (!code || code === 'no_outcome') return 'No outcome';
+  return code;
+}
+
 export function CallsPage() {
   const { selectedDealerId, search } = useOutletContext() ?? {};
   const location = useLocation();
+  const toast = useToast();
   const query = location.search || '';
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
@@ -30,8 +38,9 @@ export function CallsPage() {
       const params = {};
       if (selectedDealerId) params.dealer_id = selectedDealerId;
       if (outcome) params.outcome_code = outcome;
-      if (from) params.from = from;
-      if (to) params.to = to;
+      // Send From/To as ISO so backend can filter by start_time correctly
+      if (from) params.from = new Date(from).toISOString();
+      if (to) params.to = new Date(to).toISOString();
       const data = await apiGetCalls(params);
       let list = data ?? [];
       if (intent) list = list.filter((c) => (c.detected_intent || '').toLowerCase() === intent);
@@ -48,7 +57,7 @@ export function CallsPage() {
       setPage(1);
     } catch (e) {
       console.error(e);
-      alert(e?.message ?? 'Failed to load calls');
+      toast.error(e?.message ?? 'Failed to load calls');
     } finally {
       setLoading(false);
     }
@@ -62,17 +71,17 @@ export function CallsPage() {
   const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
 
   return (
-    <div className="p-6">
+    <div className="crm-page">
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="text-[24px] font-semibold text-crm-text">Calls</div>
-          <div className="mt-1 text-[13px] text-crm-text2">
+        <div className="crm-page-header">
+          <div className="crm-page-title">Calls</div>
+          <div className="crm-page-subtitle">
             Operational call log with transcripts, recordings, transfers and callback capture.
           </div>
         </div>
         <button
           type="button"
-          className="inline-flex h-9 items-center justify-center rounded-[6px] border border-crm-border bg-white px-4 text-[13px] font-medium text-crm-text hover:bg-[#F9FAFB] disabled:opacity-50"
+          className="crm-press inline-flex h-9 items-center justify-center rounded-crm border border-slate-700 bg-slate-800 px-4 text-[13px] font-medium text-slate-100 shadow-crm-sm transition-all duration-150 hover:bg-slate-700 disabled:opacity-50"
           onClick={load}
           disabled={loading}
         >
@@ -80,12 +89,12 @@ export function CallsPage() {
         </button>
       </div>
 
-      <div className="mt-6 rounded-[6px] border border-crm-border bg-white p-5">
+      <div className="mt-6 crm-section-card">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           <div>
-            <div className="mb-1 text-[12px] text-crm-text2">Intent</div>
+            <div className="mb-1 text-[12px] text-slate-400">Intent</div>
             <select
-              className="h-9 w-full rounded-[6px] border border-crm-border bg-white px-3 text-[13px] text-crm-text"
+              className="h-9 w-full rounded-[6px] border border-slate-700 bg-slate-900 px-3 text-[13px] text-slate-100"
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
             >
@@ -98,9 +107,9 @@ export function CallsPage() {
             </select>
           </div>
           <div>
-            <div className="mb-1 text-[12px] text-crm-text2">Outcome</div>
+            <div className="mb-1 text-[12px] text-slate-400">Outcome</div>
             <select
-              className="h-9 w-full rounded-[6px] border border-crm-border bg-white px-3 text-[13px] text-crm-text"
+              className="h-9 w-full rounded-[6px] border border-slate-700 bg-slate-900 px-3 text-[13px] text-slate-100"
               value={outcome}
               onChange={(e) => setOutcome(e.target.value)}
             >
@@ -115,37 +124,39 @@ export function CallsPage() {
             </select>
           </div>
           <div>
-            <div className="mb-1 text-[12px] text-crm-text2">From</div>
-            <input
-              type="datetime-local"
-              className="h-9 w-full rounded-[6px] border border-crm-border bg-white px-3 text-[13px] text-crm-text"
+            <div className="mb-1 text-[12px] text-slate-400">From</div>
+            <DateTimePicker
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              onChange={setFrom}
+              placeholder="mm/dd/yyyy —:— —"
+              id="calls-filter-from"
+              placement="below"
             />
           </div>
           <div>
-            <div className="mb-1 text-[12px] text-crm-text2">To</div>
-            <input
-              type="datetime-local"
-              className="h-9 w-full rounded-[6px] border border-crm-border bg-white px-3 text-[13px] text-crm-text"
+            <div className="mb-1 text-[12px] text-slate-400">To</div>
+            <DateTimePicker
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              onChange={setTo}
+              placeholder="mm/dd/yyyy —:— —"
+              id="calls-filter-to"
+              placement="below"
             />
           </div>
           <div className="flex items-end">
-            <button
-              type="button"
-              className="h-9 w-full rounded-[6px] border border-crm-primary bg-crm-primary px-4 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-              onClick={load}
-              disabled={loading}
-            >
-              Apply
-            </button>
+          <button
+            type="button"
+            className="crm-press-sm h-9 w-full rounded-[8px] border border-sky-600 bg-sky-600 px-4 text-[13px] font-medium text-white hover:bg-sky-500 disabled:opacity-50 disabled:border-slate-600 disabled:bg-slate-800"
+            onClick={load}
+            disabled={loading}
+          >
+            {loading ? 'Applying…' : 'Apply'}
+          </button>
           </div>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-[6px] border border-crm-border">
-          <div className="grid grid-cols-9 gap-0 bg-[#F9FAFB] px-4 py-3 text-[13px] font-medium text-crm-text">
+        <div className="mt-5 overflow-hidden rounded-[8px] border border-slate-800 bg-slate-950/40">
+          <div className="grid grid-cols-9 gap-0 border-b border-slate-600/80 bg-slate-900/80 px-4 py-3 text-[13px] font-medium text-slate-200">
             <div className="col-span-2">Time</div>
             <div>Dealer</div>
             <div>Caller</div>
@@ -159,24 +170,24 @@ export function CallsPage() {
             {pageRows.map((c) => (
               <div
                 key={c.id}
-                className="grid grid-cols-9 items-center gap-0 border-t border-crm-border px-4 text-[13px] text-crm-text hover:bg-[#F3F4F6]"
+                className="grid grid-cols-9 items-center gap-0 border-b border-slate-600/70 px-4 py-2.5 text-[13px] text-slate-100 transition-colors duration-150 hover:bg-slate-800/60"
                 style={{ minHeight: 44 }}
               >
-                <div className="col-span-2 text-crm-text2">
+                <div className="col-span-2 text-slate-400">
                   {c.start_time ? new Date(c.start_time).toLocaleString() : '—'}
                 </div>
-                <div className="text-crm-text2">{c.did ?? '—'}</div>
+                <div className="text-slate-400">{c.dealer_name ?? c.did ?? '—'}</div>
                 <div className="truncate">{c.caller_number ?? '—'}</div>
-                <div className="capitalize text-crm-text2">{c.detected_intent ?? '—'}</div>
-                <div className="text-crm-text2">{formatDuration(c.duration_seconds)}</div>
-                <div className="text-crm-text2">
-                  {c.transfer_success === true ? 'Success' : c.transfer_success === false ? 'Failed' : c.transferred ? 'Attempted' : '—'}
+                <div className="capitalize text-slate-400">{c.detected_intent ?? '—'}</div>
+                <div className="text-slate-400">{formatDuration(c.duration_seconds)}</div>
+                <div className="text-slate-400">
+                  {c.transfer_success === true ? 'Success' : c.transfer_success === false ? 'Failed' : c.transferred ? 'Attempted' : 'No transfer'}
                 </div>
-                <div className="text-crm-text2">{c.outcome_code ?? '—'}</div>
+                <div className="text-slate-400">{formatOutcome(c.outcome_code)}</div>
                 <div className="flex justify-end py-2">
                   <Link
                     to={`/crm/calls/${encodeURIComponent(c.id)}${query}`}
-                    className="inline-flex h-8 items-center justify-center rounded-[6px] border border-crm-border bg-white px-3 text-[13px] text-crm-text hover:bg-[#F9FAFB]"
+                    className="crm-press-sm inline-flex h-8 items-center justify-center rounded-[8px] border border-slate-600 bg-slate-800 px-3 text-[13px] font-medium text-slate-100 hover:bg-slate-700"
                   >
                     View details
                   </Link>
@@ -184,21 +195,21 @@ export function CallsPage() {
               </div>
             ))}
             {pageRows.length === 0 && (
-              <div className="border-t border-crm-border px-4 py-8 text-center text-[13px] text-crm-text2">
+              <div className="border-b border-slate-600/70 px-4 py-8 text-center text-[13px] text-slate-500">
                 No calls found.
               </div>
             )}
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between text-[12px] text-crm-text2">
+        <div className="mt-4 flex items-center justify-between text-[12px] text-slate-400">
           <div>
             Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, rows.length)} of {rows.length}
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="h-8 rounded-[6px] border border-crm-border bg-white px-3 text-[13px] disabled:opacity-50"
+              className="crm-press-sm h-8 rounded-[8px] border border-slate-600 bg-slate-800 px-3 text-[13px] font-medium text-slate-100 hover:bg-slate-700 disabled:opacity-50 disabled:border-slate-700 disabled:bg-slate-900"
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
@@ -207,7 +218,7 @@ export function CallsPage() {
             <span>Page {page} / {pageCount}</span>
             <button
               type="button"
-              className="h-8 rounded-[6px] border border-crm-border bg-white px-3 text-[13px] disabled:opacity-50"
+              className="crm-press-sm h-8 rounded-[8px] border border-slate-600 bg-slate-800 px-3 text-[13px] font-medium text-slate-100 hover:bg-slate-700 disabled:opacity-50 disabled:border-slate-700 disabled:bg-slate-900"
               disabled={page >= pageCount}
               onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             >

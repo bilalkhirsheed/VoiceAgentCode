@@ -71,6 +71,7 @@ async function buildDealerConfig(dealerId) {
       transfer_phone: dept[deptCols.transfer_phone],
       transfer_type: dept[deptCols.transfer_type],
       after_hours_action: dept[deptCols.after_hours_action],
+      contact_email: dept[deptCols.contact_email] || null,
       hours: hoursByDepartment[deptId] || []
     };
   });
@@ -87,6 +88,7 @@ async function buildDealerConfig(dealerId) {
     zip_code: dealerRow[dealerCols.zip_code],
     primary_phone: dealerRow[dealerCols.primary_phone],
     website_url: dealerRow[dealerCols.website_url],
+    contact_email: dealerRow[dealerCols.contact_email] || null,
     departments: departmentsConfig
   };
 }
@@ -247,30 +249,60 @@ async function getDealerConfig(req, res) {
   }
 }
 
-// GET /api/dealer-config/:did — fetch dealer config by DID (phone number)
+// GET /api/dealer-config/:did or GET /api/dealer-config?did= — fetch dealer config by DID (phone number)
 async function getDealerConfigByDid(req, res) {
   try {
-    const did = decodeURIComponent(req.params.did || '');
+    const rawDid = req.params.did || req.query.did || '';
+    console.log('Incoming DID (query.did):', req.query.did);
+    console.log('[getDealerConfigByDid] rawDid:', rawDid, 'query:', req.query, 'params:', req.params);
+    const decodedDid = decodeURIComponent(rawDid || '');
+
+    // Normalize DID: remove spaces and non-digits, work with digits only
+    const digitDid = (decodedDid || '')
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/\D/g, ''); // keep digits only
+
+    if (!digitDid) {
+      console.log('[getDealerConfigByDid] Missing DID after normalization, decodedDid:', decodedDid);
+      return res.status(400).json({ error: 'Missing did (use path /dealer-config/:did or query ?did=+1234567890)' });
+    }
+
+    // For matching we will compare on "digits only" so that formats like
+    // "+14374940150", "14374940150" or "  +1 437 494 0150 " all work.
     const dealerTable = dealer.tableName;
     const dealerCols = dealer.columns;
 
-    // Try exact match first, then with/without leading +
-    const variants = [did, did.startsWith('+') ? did : `+${did}`, did.replace(/^\+/, '')];
     let dealerRow = null;
 
-    for (const phone of [...new Set(variants)]) {
-      const { data, error } = await supabase
-        .from(dealerTable)
-        .select('*')
-        .eq(dealerCols.primary_phone, phone)
-        .maybeSingle();
+    // Helper to normalize phone fields from DB to digits-only
+    const normalizeDbPhone = (value) =>
+      (value || '')
+        .toString()
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/\D/g, '');
 
+    // 1) Try inbound_did first (preferred)
+    {
+      const { data, error } = await supabase.from(dealerTable).select('*');
       if (error) {
         return res.status(500).json({ error: error.message });
       }
-      if (data) {
-        dealerRow = data;
-        break;
+
+      if (Array.isArray(data)) {
+        dealerRow = data.find((row) => normalizeDbPhone(row[dealerCols.inbound_did]) === digitDid) || null;
+      }
+    }
+
+    // 2) Fallback: try primary_phone (legacy behaviour)
+    if (!dealerRow) {
+      const { data, error } = await supabase.from(dealerTable).select('*');
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+      if (Array.isArray(data)) {
+        dealerRow = data.find((row) => normalizeDbPhone(row[dealerCols.primary_phone]) === digitDid) || null;
       }
     }
 
@@ -285,7 +317,17 @@ async function getDealerConfigByDid(req, res) {
       return res.status(404).json({ error: 'Dealer not found' });
     }
 
-    res.json(config);
+    // Flat transfer phones for Retell "Store as Variables" (e.g. {{service_transfer_phone}})
+    const departments = config.departments || [];
+    const byName = (name) => departments.find((d) => (d.name || '').toLowerCase() === name.toLowerCase());
+    const payload = {
+      ...config,
+      service_transfer_phone: byName('Service')?.transfer_phone || null,
+      sales_transfer_phone: byName('Sales')?.transfer_phone || null,
+      parts_transfer_phone: byName('Parts')?.transfer_phone || null
+    };
+
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -337,17 +379,25 @@ function computeIsOpenFromConfig(config, timeZone, departmentName) {
 
   let targetDept = departments[0];
   if (departmentName) {
-    const depLower = departmentName.toLowerCase();
-    const match = departments.find(
-      (d) => (d.name || '').toLowerCase() === depLower
-    );
-    if (match) {
-      targetDept = match;
-    }
+    let depLower = String(departmentName).trim().toLowerCase();
+    const normalized = depLower.replace(/\bdepartment\b/g, '').replace(/\bdept\b/g, '').trim();
+
+    // 1) Exact match
+    const exact = departments.find((d) => String(d?.name || '').trim().toLowerCase() === depLower);
+    // 2) Normalized match (remove "department"/"dept")
+    const normalizedMatch = departments.find((d) => String(d?.name || '').trim().toLowerCase() === normalized);
+    // 3) Fuzzy match (substring either way)
+    const fuzzy = departments.find((d) => {
+      const dn = String(d?.name || '').trim().toLowerCase();
+      return dn && (dn.includes(depLower) || depLower.includes(dn) || dn.includes(normalized) || normalized.includes(dn));
+    });
+
+    targetDept = exact || normalizedMatch || fuzzy || targetDept;
   }
 
   const hoursList = targetDept.hours || [];
-  const today = hoursList.find((h) => h.day === weekday);
+  const weekdayNorm = String(weekday || '').trim();
+  const today = hoursList.find((h) => String(h?.day || '').trim() === weekdayNorm);
 
   if (!today) return false;
   if (today.is_closed) return false;
@@ -356,33 +406,65 @@ function computeIsOpenFromConfig(config, timeZone, departmentName) {
   const closeMinutes = hhmmToMinutes(today.close);
   if (openMinutes === null || closeMinutes === null) return false;
 
-  return nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
+  const isOpen = nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
+  // Debugging: understand why "closed" was returned for a department
+  console.log('[DealerOpenStatus][computeIsOpenFromConfig]', {
+    requestedDepartment: departmentName || '(none)',
+    matchedDepartment: targetDept?.name || null,
+    weekday: weekdayNorm,
+    nowMinutes,
+    today,
+    openMinutes,
+    closeMinutes,
+    isOpen
+  });
+
+  return isOpen;
 }
 
 // GET /api/dealer-open-status/:did/:departmentName — returns dealer_name, is_open, voice
 async function getDealerOpenStatusByDid(req, res) {
   try {
-    const did = decodeURIComponent(req.params.did || '');
+    const rawDid = req.params.did || '';
+    const decodedDid = decodeURIComponent(rawDid || '');
+
+    const digitDid = (decodedDid || '')
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/\D/g, '');
+
     const departmentName = req.params.departmentName || '';
     const dealerTable = dealer.tableName;
     const dealerCols = dealer.columns;
 
-    const variants = [did, did.startsWith('+') ? did : `+${did}`, did.replace(/^\+/, '')];
+    const normalizeDbPhone = (value) =>
+      (value || '')
+        .toString()
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/\D/g, '');
+
     let dealerRow = null;
 
-    for (const phone of [...new Set(variants)]) {
-      const { data, error } = await supabase
-        .from(dealerTable)
-        .select('*')
-        .eq(dealerCols.primary_phone, phone)
-        .maybeSingle();
-
+    // 1) Try inbound_did first
+    {
+      const { data, error } = await supabase.from(dealerTable).select('*');
       if (error) {
         return res.status(500).json({ error: error.message });
       }
-      if (data) {
-        dealerRow = data;
-        break;
+      if (Array.isArray(data)) {
+        dealerRow = data.find((row) => normalizeDbPhone(row[dealerCols.inbound_did]) === digitDid) || null;
+      }
+    }
+
+    // 2) Fallback: try primary_phone for legacy data
+    if (!dealerRow) {
+      const { data, error } = await supabase.from(dealerTable).select('*');
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+      if (Array.isArray(data)) {
+        dealerRow = data.find((row) => normalizeDbPhone(row[dealerCols.primary_phone]) === digitDid) || null;
       }
     }
 
@@ -409,6 +491,13 @@ async function getDealerOpenStatusByDid(req, res) {
       return res.status(500).json({ error: holidayError.message });
     }
 
+    console.log('[DealerOpenStatus][holiday check]', {
+      todayDate,
+      dealerId,
+      holidayFound: Boolean(holidayRow),
+      holiday_is_closed: holidayRow ? holidayRow[holidayCols.is_closed] : null
+    });
+
     const config = await buildDealerConfig(dealerId);
 
     if (!config) {
@@ -430,6 +519,12 @@ async function getDealerOpenStatusByDid(req, res) {
       dealer_name: config.dealer_name,
       is_open,
       voice: config.voice
+    });
+    console.log('[DealerOpenStatus][result]', {
+      did: digitDid,
+      departmentName,
+      dealer_name: config.dealer_name,
+      is_open
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
