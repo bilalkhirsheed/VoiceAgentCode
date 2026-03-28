@@ -171,6 +171,10 @@ export function apiAdminListDealers({ search = '', page = 1, limit = 20 } = {}) 
   return request(`/admin/dealers${q ? `?${q}` : ''}`);
 }
 
+export function apiAdminGetMetricsOverview() {
+  return request('/admin/metrics/overview');
+}
+
 export function apiAdminGetDealerDetail(dealerId) {
   return request(`/admin/dealers/${dealerId}`);
 }

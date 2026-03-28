@@ -13,6 +13,7 @@ import { SalesLeadsPage } from './pages/SalesLeadsPage';
 import { ServiceAppointmentsPage } from './pages/ServiceAppointmentsPage';
 import { PartsRequestsPage } from './pages/PartsRequestsPage';
 import { DealershipInfoPage } from './pages/DealershipInfoPage';
+import { AiUsageMetricsPage } from './pages/AiUsageMetricsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { InboxPage } from './pages/InboxPage';
 import { TransfersPage } from './pages/TransfersPage';
@@ -61,6 +62,7 @@ export default function App() {
             element={<TransfersPage />}
           />
           <Route path="dealership" element={<DealershipInfoPage />} />
+          <Route path="ai-metrics" element={<AiUsageMetricsPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="hangups" element={<HangupsPage />} />
           <Route path="reports" element={<ReportsPage />} />

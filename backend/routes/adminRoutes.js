@@ -2,6 +2,7 @@ const express = require('express');
 const { login } = require('../controllers/adminAuthController');
 const {
   adminListDealers,
+  adminGetMetricsOverview,
   adminGetDealerDetail,
   adminCreateDealer,
   adminUpdateDealer,
@@ -25,6 +26,7 @@ const router = express.Router();
 router.post('/admin/login', login);
 
 // Admin-only dealer management
+router.get('/admin/metrics/overview', requireAdmin, adminGetMetricsOverview);
 router.get('/admin/dealers', requireAdmin, adminListDealers);
 router.get('/admin/dealers/:dealerId', requireAdmin, adminGetDealerDetail);
 router.post('/admin/dealers', requireAdmin, adminCreateDealer);

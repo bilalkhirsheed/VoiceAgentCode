@@ -1,6 +1,6 @@
 const supabase = require('../config/supabaseClient');
 const bcrypt = require('bcryptjs');
-const { dealer, department, departmentHours, holiday } = require('../models');
+const { dealer, department, departmentHours, holiday, call } = require('../models');
 const { buildDealerConfig } = require('./dealerController');
 
 // --- Helpers ---
@@ -11,6 +11,18 @@ function getPagination(req, defaultLimit = 20) {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
   return { page, limit, from, to };
+}
+
+function normalizePhone(value) {
+  return String(value || '').trim().replace(/\D/g, '');
+}
+
+function toMinutes(row, callCols) {
+  const billable = Number(row?.[callCols.billable_minutes]);
+  if (Number.isFinite(billable) && billable > 0) return billable;
+  const seconds = Number(row?.[callCols.duration_seconds]);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds / 60;
+  return 0;
 }
 
 // --- Dealers ---
@@ -202,6 +214,100 @@ async function adminDeleteDealer(req, res) {
     }
 
     return res.status(204).send();
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// GET /api/admin/metrics/overview
+async function adminGetMetricsOverview(req, res) {
+  try {
+    const dealerTable = dealer.tableName;
+    const dealerCols = dealer.columns;
+    const callTable = call.tableName;
+    const callCols = call.columns;
+
+    const [{ data: dealerRows, error: dealerErr }, { data: callRows, error: callErr }] = await Promise.all([
+      supabase.from(dealerTable).select('*'),
+      supabase
+        .from(callTable)
+        .select(
+          `${callCols.id}, ${callCols.dealer_id}, ${callCols.did}, ${callCols.billable_minutes}, ${callCols.duration_seconds}, ${callCols.transferred}`
+        )
+    ]);
+
+    if (dealerErr) return res.status(500).json({ error: dealerErr.message });
+    if (callErr) return res.status(500).json({ error: callErr.message });
+
+    const dealers = dealerRows || [];
+    const calls = callRows || [];
+
+    const dealersById = new Map();
+    const dealersByPhoneDigits = new Map();
+    dealers.forEach((d) => {
+      const id = String(d[dealerCols.id]);
+      dealersById.set(id, d);
+      const digits = normalizePhone(d[dealerCols.primary_phone]);
+      if (digits) dealersByPhoneDigits.set(digits, d);
+    });
+
+    const perDealer = new Map();
+    dealers.forEach((d) => {
+      perDealer.set(String(d[dealerCols.id]), {
+        dealer_id: d[dealerCols.id],
+        dealer_name: d[dealerCols.dealer_name],
+        dealer_phone: d[dealerCols.primary_phone] || null,
+        total_calls: 0,
+        total_minutes: 0,
+        total_live_agent_transfers: 0
+      });
+    });
+
+    let networkCalls = 0;
+    let networkMinutes = 0;
+    let networkTransfers = 0;
+
+    calls.forEach((c) => {
+      const dealerIdRaw = c[callCols.dealer_id];
+      const dealerId = dealerIdRaw != null ? String(dealerIdRaw) : null;
+      const didDigits = normalizePhone(c[callCols.did]);
+      const resolvedDealer =
+        (dealerId && dealersById.get(dealerId)) ||
+        (didDigits ? dealersByPhoneDigits.get(didDigits) : null);
+      if (!resolvedDealer) return;
+
+      const resolvedId = String(resolvedDealer[dealerCols.id]);
+      const bucket = perDealer.get(resolvedId);
+      if (!bucket) return;
+
+      const mins = toMinutes(c, callCols);
+      const isTransfer = c[callCols.transferred] === true;
+
+      bucket.total_calls += 1;
+      bucket.total_minutes += mins;
+      if (isTransfer) bucket.total_live_agent_transfers += 1;
+
+      networkCalls += 1;
+      networkMinutes += mins;
+      if (isTransfer) networkTransfers += 1;
+    });
+
+    const dealerships = [...perDealer.values()]
+      .map((d) => ({
+        ...d,
+        total_minutes: Number(d.total_minutes.toFixed(2))
+      }))
+      .sort((a, b) => b.total_calls - a.total_calls);
+
+    return res.json({
+      totals: {
+        total_dealerships: dealers.length,
+        total_calls: networkCalls,
+        total_minutes: Number(networkMinutes.toFixed(2)),
+        total_live_agent_transfers: networkTransfers
+      },
+      dealerships
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -543,6 +649,7 @@ async function adminDeleteHoliday(req, res) {
 
 module.exports = {
   adminListDealers,
+  adminGetMetricsOverview,
   adminGetDealerDetail,
   adminCreateDealer,
   adminUpdateDealer,

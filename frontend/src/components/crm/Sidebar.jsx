@@ -10,6 +10,7 @@ import {
   PhoneIncoming,
   ArrowLeftRight,
   Building2,
+  BarChart3,
   Calendar,
   FileText,
   PhoneOff,
@@ -35,6 +36,7 @@ const navItems = [
   { to: '/crm/hangups', label: 'User Hangups', icon: PhoneOff },
   { to: '/crm/transfers', label: 'Transfers', icon: ArrowLeftRight },
   { to: '/crm/dealership', label: 'Dealership Info', icon: Building2 },
+  { to: '/crm/ai-metrics', label: 'AI Metrics', icon: BarChart3 },
   // Calendar is still available by URL but hidden from primary nav
   { to: '/crm/reports', label: 'Reports', icon: FileText }
 ];

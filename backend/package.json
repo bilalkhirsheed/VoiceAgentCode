@@ -18,7 +18,7 @@
     "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.2",
     "luxon": "^3.7.2",
-    "nodemailer": "^8.0.2"
+    "nodemailer": "^8.0.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

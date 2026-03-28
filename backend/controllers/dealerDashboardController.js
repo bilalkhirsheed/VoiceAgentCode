@@ -61,6 +61,49 @@ async function findDealerByPrimaryPhone(primaryPhone) {
   return dealerRow;
 }
 
+function toNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function computeAiUsageMetrics(callRows, callCols) {
+  const nowMs = Date.now();
+  const windows = [
+    { key: 'last_7_days', days: 7, label: 'Last 7 days' },
+    { key: 'last_14_days', days: 14, label: 'Last 14 days' },
+    { key: 'last_30_days', days: 30, label: 'Last 30 days' },
+    { key: 'all_time', days: null, label: 'All-time' }
+  ];
+
+  const result = {};
+  windows.forEach((w) => {
+    result[w.key] = { label: w.label, days: w.days, call_count: 0, total_minutes: 0 };
+  });
+
+  (callRows || []).forEach((row) => {
+    const startRaw = row?.[callCols.start_time];
+    const startMs = startRaw ? new Date(startRaw).getTime() : NaN;
+    if (!Number.isFinite(startMs)) return;
+
+    const durationMinutes = toNumber(row?.[callCols.billable_minutes]) > 0
+      ? toNumber(row?.[callCols.billable_minutes])
+      : toNumber(row?.[callCols.duration_seconds]) / 60;
+
+    windows.forEach((w) => {
+      if (w.days == null || (nowMs - startMs) <= w.days * 24 * 60 * 60 * 1000) {
+        result[w.key].call_count += 1;
+        result[w.key].total_minutes += durationMinutes;
+      }
+    });
+  });
+
+  windows.forEach((w) => {
+    result[w.key].total_minutes = Number(result[w.key].total_minutes.toFixed(2));
+  });
+
+  return result;
+}
+
 // GET /api/dealer-dashboard?dealer_phone=...
 async function getDealerDashboard(req, res) {
   try {
@@ -137,7 +180,7 @@ async function getDealerDashboard(req, res) {
     }
 
     // Fetch appointments + raw recent calls
-    const [apptByIdRes, apptByPhoneRes, callsResByDealerId, callsResByDid] = await Promise.all([
+    const [apptByIdRes, apptByPhoneRes, callsResByDealerId, callsResByDid, usageCallsByDealerIdRes, usageCallsByDidRes] = await Promise.all([
       supabase
         .from(saTable)
         .select('*')
@@ -152,22 +195,42 @@ async function getDealerDashboard(req, res) {
         .limit(50),
       supabase
         .from(callTable)
-        .select(callCols.id, callCols.start_time, callCols.caller_number, callCols.detected_intent, callCols.outcome_code)
+        .select(
+          `${callCols.id}, ${callCols.start_time}, ${callCols.caller_number}, ${callCols.detected_intent}, ${callCols.outcome_code}`
+        )
         .eq(callCols.dealer_id, String(dealerId))
         .order(callCols.start_time, { ascending: false })
         .limit(80),
       supabase
         .from(callTable)
-        .select(callCols.id, callCols.start_time, callCols.caller_number, callCols.detected_intent, callCols.outcome_code)
+        .select(
+          `${callCols.id}, ${callCols.start_time}, ${callCols.caller_number}, ${callCols.detected_intent}, ${callCols.outcome_code}`
+        )
         .in(callCols.did, didVariants)
         .order(callCols.start_time, { ascending: false })
-        .limit(80)
+        .limit(80),
+      supabase
+        .from(callTable)
+        .select(
+          `${callCols.id}, ${callCols.start_time}, ${callCols.duration_seconds}, ${callCols.billable_minutes}`
+        )
+        .eq(callCols.dealer_id, String(dealerId))
+        .order(callCols.start_time, { ascending: false }),
+      supabase
+        .from(callTable)
+        .select(
+          `${callCols.id}, ${callCols.start_time}, ${callCols.duration_seconds}, ${callCols.billable_minutes}`
+        )
+        .in(callCols.did, didVariants)
+        .order(callCols.start_time, { ascending: false })
     ]);
 
     if (apptByIdRes.error) throw new Error(apptByIdRes.error.message);
     if (apptByPhoneRes.error) throw new Error(apptByPhoneRes.error.message);
     if (callsResByDealerId.error) throw new Error(callsResByDealerId.error.message);
     if (callsResByDid.error) throw new Error(callsResByDid.error.message);
+    if (usageCallsByDealerIdRes.error) throw new Error(usageCallsByDealerIdRes.error.message);
+    if (usageCallsByDidRes.error) throw new Error(usageCallsByDidRes.error.message);
 
     const analysisRows = analysisRes.data || [];
     const apptById = apptByIdRes.data || [];
@@ -192,6 +255,15 @@ async function getDealerDashboard(req, res) {
     const recentCallRows = [...mergedRecentCallsById.values()]
       .sort((a, b) => new Date(b?.[callCols.start_time] || 0) - new Date(a?.[callCols.start_time] || 0))
       .slice(0, 80);
+
+    const mergedUsageCallsById = new Map();
+    for (const r of [...(usageCallsByDealerIdRes.data || []), ...(usageCallsByDidRes.data || [])]) {
+      const id = r?.[callCols.id];
+      if (!id) continue;
+      mergedUsageCallsById.set(id, r);
+    }
+    const usageCallRows = [...mergedUsageCallsById.values()];
+    const ai_usage = computeAiUsageMetrics(usageCallRows, callCols);
 
     function filterCategory(cat) {
       return analysisRows.filter((row) => (row[caCols.category] || '').toLowerCase() === cat);
@@ -286,7 +358,8 @@ async function getDealerDashboard(req, res) {
       service_appointments: {
         count: apptRows.length,
         latest: buildApptList(apptRows)
-      }
+      },
+      ai_usage
     });
   } catch (err) {
     console.error('getDealerDashboard error:', err);
